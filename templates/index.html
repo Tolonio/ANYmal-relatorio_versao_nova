@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% set aba = 'missoes' %}
-{% block titulo %}Missões{% endblock %}
+{% set aba = 'inspecoes' %}
+{% block titulo %}Inspeções{% endblock %}
 {% block cabeca %}
 <style>
   .migalhas { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin-bottom: 14px; }
@@ -21,8 +21,9 @@
 </style>
 {% endblock %}
 {% block conteudo %}
-<h1>Missões gravadas no robô</h1>
-<p class="sub">Escolha uma missão e gere o relatório traduzido com as fotos comprimidas.</p>
+<h1>Inspeções gravadas no robô</h1>
+<p class="sub"><b>Gerar relatório</b> cria o relatório traduzido da inspeção com a condição padrão e baixa o ZIP.
+  <b>Experimento</b> permite escolher a compressão e gerar vários relatórios para comparar.</p>
 
 <div class="cartao roi">
   {% if roi.ativa %}
@@ -66,7 +67,7 @@
             {% endif %}
             <div>
               <a class="nome" href="{{ url_for('index', path=item.caminho_absoluto) }}">{{ item.nome }}</a>
-              {% if item.eh_missao %}<div class="muted">Missão{% if item.n_fotos is not none %} · {{ item.n_fotos }} fotos{% endif %}</div>{% endif %}
+              {% if item.eh_missao %}<div class="muted">Inspeção{% if item.n_fotos is not none %} · {{ item.n_fotos }} fotos{% endif %}</div>{% endif %}
             </div>
           {% else %}
             <span class="icone arquivo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></span>
@@ -82,7 +83,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
               Gerar relatório
             </a>
-            <a class="botao sec esconde-celular" href="{{ url_for('pagina_fila', missao=item.caminho_absoluto) }}"
+            <a class="botao sec" href="{{ url_for('pagina_fila', missao=item.caminho_absoluto) }}"
                title="Enfileirar várias condições e repetições">Experimento</a>
           {% elif item.is_dir %}
             <a class="botao sec" href="{{ url_for('index', path=item.caminho_absoluto) }}">Abrir</a>

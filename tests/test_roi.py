@@ -376,7 +376,7 @@ def test_fila_varias_condicoes_com_coletor(modulos, missao):
     assert csv_txt.startswith("timestamp,timestamp_epoch,fase,cpu_percent")
 
     assert "Fila de relatórios" in cli.get("/fila").get_data(as_text=True)
-    assert "Enfileirar experimento" in cli.get("/fila", query_string={"missao": missao["pasta"]}).get_data(as_text=True)
+    assert "Como funciona" in cli.get("/fila", query_string={"missao": missao["pasta"]}).get_data(as_text=True)
     assert cli.post("/api/fila", json={"missao": missao["pasta"], "condicoes": ["xyz"]}).status_code == 400
     assert cli.post("/api/fila", json={"missao": "/etc", "condicoes": ["600/35"]}).status_code == 400
     assert sw.host_valido("-f") is None and sw.host_valido("192.168.0.10") == "192.168.0.10"

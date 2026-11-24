@@ -20,26 +20,47 @@
   .acoes-fila { display: flex; gap: 8px; justify-content: flex-end; }
   .barrinha { width: 90px; height: 6px; background: #e8ecec; border-radius: 99px; overflow: hidden; display: inline-block; vertical-align: middle; }
   .barrinha div { height: 100%; background: var(--verde); }
+  .explica ol { margin: 0 0 12px; padding-left: 20px; }
+  .explica li { margin: 4px 0; }
+  .legenda { display: grid; gap: 6px; background: var(--fundo); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .legenda div { display: grid; grid-template-columns: 110px 1fr; gap: 10px; }
+  .legenda b { font-variant-numeric: tabular-nums; }
+  .botao:disabled { opacity: .5; cursor: not-allowed; }
   button.link { background: none; border: 0; color: var(--erro); cursor: pointer; font: inherit; font-size: 13px; padding: 0; }
 </style>
 {% endblock %}
 {% block conteudo %}
-<h1>Fila de relatórios</h1>
-<p class="sub">Os relatórios são gerados um de cada vez, na ordem. Para medir tempos de entrega sem
-  interferência, use o <code>experimento_pc.py</code> no PC: ele pede um relatório, baixa e só então pede o próximo.</p>
-
 {% if missao %}
-<form class="cartao" method="post" action="{{ url_for('pagina_fila') }}">
-  <h2>Enfileirar experimento · {{ missao_nome }}</h2>
+<h1>Experimento · inspeção {{ missao_nome }}</h1>
+<p class="sub">Gere relatórios desta inspeção com compressões diferentes para comparar tamanho, tempo e qualidade.</p>
+
+<div class="cartao explica">
+  <h2>Como funciona</h2>
+  <ol>
+    <li><b>Cada condição marcada vira um relatório completo</b> (PDF traduzido + fotos em ZIP), com as fotos comprimidas daquele jeito.</li>
+    <li><b>Repetições</b>: quantas vezes cada condição é gerada. Use 1 para só obter o relatório; use 3 ou mais quando for medir tempos e tirar média.</li>
+    <li>Os relatórios entram na <b>fila</b> e o robô gera <b>um de cada vez</b>, na ordem. Acompanhe na lista abaixo e clique em <b>Baixar</b> quando aparecer “pronto”. Eles também ficam em <a href="{{ url_for('lista_relatorios') }}">Relatórios salvos</a>.</li>
+    <li><b>Coletor CSV</b>: grava a cada segundo CPU, memória, rede, ping até este computador e perdas da fila de rede, do início do processamento até o fim do download. Use nas medições do artigo; o CSV aparece no botão “CSV” de cada relatório.</li>
+  </ol>
+  <div class="legenda">
+    <div><b>original</b><span>fotos sem recompressão (o maior pacote)</span></div>
+    <div><b>1200/70</b><span>uniforme: toda foto reduzida para caber em 1200×1200 px e salva em JPEG qualidade 70</span></div>
+    <div><b>roi:1200/70</b><span>a peça marcada no Roboflow fica em 1200/70 e o resto da foto é borrado (bem menor); nas térmicas a escala de temperatura fica nítida; fotos sem marcação saem iguais à 1200/70</span></div>
+  </div>
+  <p class="muted" style="margin:10px 0 0">Só quer o relatório com ROI? Marque <b>uma</b> condição roi e deixe 1 repetição.
+    Quanto maior o número (600 → 1600 e 35 → 85), melhor a foto e maior o arquivo.</p>
+</div>
+
+<form class="cartao" method="post" action="{{ url_for('pagina_fila') }}" id="form_exp">
   <input type="hidden" name="missao" value="{{ missao }}">
 
   <div class="grupo">Sem compressão e uniforme</div>
   <div class="grade-cond">
     {% for c in condicoes if not c.startswith('roi:') %}
-    <label class="cond"><input type="checkbox" name="condicao" value="{{ c }}" {% if c in ('original', '600/35', '1200/70') %}checked{% endif %}> {{ c }}</label>
+    <label class="cond"><input type="checkbox" name="condicao" value="{{ c }}"> {{ c }}</label>
     {% endfor %}
   </div>
-  <div class="grupo">Com ROI (peça na mesma L/Q; fundo suavizado)</div>
+  <div class="grupo">Com ROI (peça nítida, resto borrado)</div>
   <div class="grade-cond">
     {% for c in condicoes if c.startswith('roi:') %}
     <label class="cond"><input type="checkbox" name="condicao" value="{{ c }}" {% if not roi.ativa %}disabled{% elif c == 'roi:1200/70' %}checked{% endif %}> {{ c }}</label>
@@ -47,20 +68,39 @@
   </div>
 
   <div class="linha-form">
-    <label>Outras: <input type="text" name="extras" placeholder="ex.: roi:1600/80 roi:1200/70+pol" size="28"></label>
-    <label>Repetições <input type="number" name="repeticoes" value="3" min="1" max="20"></label>
-    <label><input type="checkbox" name="embaralhar" value="1" checked> ordem aleatória em cada repetição</label>
-    <label><input type="checkbox" name="coletor" value="1" checked> coletor CSV</label>
+    <label>Outras: <input type="text" name="extras" placeholder="ex.: roi:1600/80" size="22"
+           title="Outras condições separadas por espaço, no mesmo formato (L/Q ou roi:L/Q)"></label>
+    <label>Repetições <input type="number" name="repeticoes" value="1" min="1" max="20"></label>
+    <label><input type="checkbox" name="coletor" value="1"> coletor CSV</label>
   </div>
-  <button class="botao" type="submit">Enfileirar</button>
+  <button class="botao" type="submit" id="enviar">Gerar relatórios</button>
   <a class="botao sec" href="{{ url_for('pagina_fila') }}">Cancelar</a>
+  <span class="muted" id="total" style="margin-left:10px"></span>
   {% if not roi.ativa %}<p class="muted">ROI desligada ({{ roi.motivo }}): as condições roi:… ficam desabilitadas.</p>{% endif %}
 </form>
+<script>
+(function () {
+  const f = document.getElementById("form_exp");
+  function conta() {
+    const n = f.querySelectorAll("input[name=condicao]:checked").length
+      + f.extras.value.trim().split(/[\s,]+/).filter(Boolean).length;
+    const r = Math.max(1, parseInt(f.repeticoes.value || "1", 10));
+    document.getElementById("total").textContent =
+      n ? (n * r) + (n * r === 1 ? " relatório será gerado" : " relatórios serão gerados") : "marque pelo menos uma condição";
+    document.getElementById("enviar").disabled = !n;
+  }
+  f.addEventListener("input", conta);
+  conta();
+})();
+</script>
 {% else %}
-<div class="cartao muted">Para enfileirar várias condições, clique em <b>Experimento</b> ao lado de uma missão em
-  <a href="{{ url_for('index') }}">Missões</a>.</div>
+<h1>Fila de relatórios</h1>
+<p class="sub">Todos os relatórios pedidos desde que o servidor ligou. O robô gera um de cada vez, na ordem.</p>
+<div class="cartao muted">Para gerar relatórios com outras compressões, vá em <a href="{{ url_for('index') }}">Inspeções</a>
+  e clique em <b>Experimento</b> ao lado da inspeção.</div>
 {% endif %}
 
+{% if missao %}<h2 style="font-size:16px;margin:22px 0 8px">Relatórios pedidos</h2>{% endif %}
 <div class="cartao" style="padding:6px 10px">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px">
     <b id="resumo">—</b>
@@ -70,7 +110,7 @@
   </div>
   <table class="lista">
     <thead><tr>
-      <th>Condição</th><th class="esconde-celular">Missão</th><th>Estado</th>
+      <th>Condição</th><th class="esconde-celular">Inspeção</th><th>Estado</th>
       <th class="direita">Tamanho</th><th class="direita esconde-celular">Processamento</th><th></th>
     </tr></thead>
     <tbody id="corpo"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>

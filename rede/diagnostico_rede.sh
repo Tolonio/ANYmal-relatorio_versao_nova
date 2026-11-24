@@ -81,7 +81,7 @@ limpar
 echo "  rota até o PC: $(ip route get "$PC" | head -n1)"
 if ! ip route get "$PC" | grep -q "dev $IF"; then
     echo "  ATENÇÃO: o tráfego para o PC NÃO sai pela $IF; o tc dela não afeta o download."
-    echo "           Rode com IF=<interface certa> (veja a linha acima)."
+    echo "           Rode: sudo IF=<interface certa> bash rede/diagnostico_rede.sh <IP> (veja a linha acima)."
 fi
 
 echo "Conferindo o iperf3 no PC..."

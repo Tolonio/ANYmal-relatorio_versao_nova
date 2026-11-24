@@ -37,7 +37,10 @@
     max-width: 1040px; margin: 0 auto; padding: 10px 20px;
     display: flex; align-items: center; gap: 18px;
   }
+  .topo .logos { display: flex; align-items: center; gap: 14px; }
   .topo .itv { height: 44px; width: auto; display: block; }
+  .topo .vale { height: 34px; width: auto; display: block; }
+  .topo .sep-logo { width: 1px; height: 32px; background: var(--linha); }
   .topo .sep { width: 1px; align-self: stretch; background: var(--linha); margin: 4px 0; }
   .topo .marca { line-height: 1.2; }
   .topo .marca b { display: block; font-size: 17px; letter-spacing: .01em; }
@@ -101,8 +104,12 @@
   footer { max-width: 1040px; margin: 0 auto 30px; padding: 0 20px; color: var(--tinta-3); font-size: 12.5px; }
 
   @media (max-width: 680px) {
-    .topo-in { padding: 8px 14px; gap: 10px; }
-    .topo .itv { height: 32px; }
+    .topo-in { padding: 8px 14px 4px; gap: 10px; flex-wrap: wrap; }
+    .topo .robo { margin-left: auto; }
+    .topo nav { order: 3; width: 100%; margin-left: 0; justify-content: space-between; padding-bottom: 4px; }
+    .topo .itv { height: 30px; }
+    .topo .vale { height: 24px; }
+    .topo .logos { gap: 8px; }
     .topo .marca, .topo .sep { display: none; }
     .topo .robo { height: 40px; margin: -4px 0; }
     .topo nav { gap: 2px; }
@@ -123,14 +130,18 @@
 <body>
 <header class="topo">
   <div class="topo-in">
-    <img class="itv" src="{{ url_for('static', filename='logo_itv.png') }}" alt="Instituto Tecnológico Vale" width="165" height="44">
+    <div class="logos">
+      <img class="itv" src="{{ url_for('static', filename='logo_itv.png') }}" alt="Instituto Tecnológico Vale" width="165" height="44">
+      <span class="sep-logo"></span>
+      <img class="vale" src="{{ url_for('static', filename='logo_vale.png') }}" alt="Vale" width="98" height="38">
+    </div>
     <div class="sep"></div>
     <div class="marca">
       <b>Relatórios de Inspeção</b>
       <span>Robô quadrúpede ANYmal</span>
     </div>
     <nav>
-      <a href="{{ url_for('index') }}" class="{% if aba == 'missoes' %}ativo{% endif %}">Missões</a>
+      <a href="{{ url_for('index') }}" class="{% if aba == 'inspecoes' %}ativo{% endif %}">Inspeções</a>
       <a href="{{ url_for('pagina_fila') }}" class="{% if aba == 'fila' %}ativo{% endif %}">Fila{% if n_fila %} <span class="selo" style="padding:0 7px;font-size:11px">{{ n_fila }}</span>{% endif %}</a>
       <a href="{{ url_for('lista_relatorios') }}" class="{% if aba == 'relatorios' %}ativo{% endif %}">Relatórios<span class="esconde-celular"> salvos</span></a>
     </nav>
@@ -144,7 +155,7 @@
 </main>
 
 <footer>
-  Instituto Tecnológico Vale · servidor local do ANYmal · configuração <b>{{ config }}</b>
+  Instituto Tecnológico Vale · Vale · servidor local do ANYmal · condição padrão <b>{{ config }}</b>
 </footer>
 </body>
 </html>
