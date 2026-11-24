@@ -56,10 +56,20 @@ PADRAO = {
     "qualidade": 80,       # qualidade JPEG da foto entregue
     "lado_fundo": 400,     # resolução "efetiva" do fundo (menor = mais borrado e menor)
     "qualidade_fundo": 30, # pré-quantização do fundo (0 = desligada); ver compor_roi()
-    "modo": "circulo",     # "circulo" (círculo mínimo em volta da peça) ou "poligono"
+    "modo": "auto",        # "auto": círculo nas peças compactas, contorno nas alongadas;
+                           # "circulo" ou "poligono" forçam um dos dois
     "margem": 0.15,        # círculo cresce 15% do raio para pegar a peça inteira
     "margem_min": 0.012,   # ... e pelo menos 1,2% do lado menor da foto
     "transicao": 0.02,     # largura da borda suave (fração do lado menor)
+    "alongamento": 2.5,    # modo auto: se o círculo tem > 2,5× a área da peça, usa o contorno
+}
+
+# Regiões aplicadas a TODA foto de um tamanho, mesmo sem marcação (inclusive em
+# missões novas). As térmicas (1158×768) têm a escala de temperatura sempre na
+# faixa da direita: x de 0,864 a 1,0 em todas as 25 térmicas marcadas no Roboflow.
+REGIOES_FIXAS = {
+    (1158, 768): [{"classe": "escala_termica",
+                   "poligono": [(0.86, 0.0), (1.0, 0.0), (1.0, 1.0), (0.86, 1.0)]}],
 }
 
 
@@ -313,6 +323,31 @@ def circulos_roi(regioes: List[dict], largura: int, altura: int,
     return circulos
 
 
+def area_poligono(pts) -> float:
+    return abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))) / 2
+
+
+def separar_regioes(regioes: List[dict], largura: int, altura: int, modo: str = PADRAO["modo"],
+                    alongamento: float = PADRAO["alongamento"]) -> Tuple[List[dict], List[dict]]:
+    """(regiões protegidas por círculo, regiões protegidas pelo contorno)."""
+    if modo == "circulo":
+        return list(regioes), []
+    if modo == "poligono":
+        return [], list(regioes)
+    if modo != "auto":
+        raise ValueError(f"modo de ROI desconhecido: {modo}")
+    circ, pol = [], []
+    for reg in regioes:
+        pts = [(x * largura, y * altura) for x, y in reg["poligono"]]
+        if len(pts) < 3:
+            circ.append(reg)
+            continue
+        _, _, r = circulo_minimo(pts)
+        compacta = math.pi * r * r <= alongamento * max(area_poligono(pts), 1.0)
+        (circ if compacta else pol).append(reg)
+    return circ, pol
+
+
 def mascara_poligonos(regioes: List[dict], largura: int, altura: int) -> Image.Image:
     """Máscara binária (L) só dos polígonos anotados: a peça em si (usada nas métricas)."""
     m = Image.new("L", (largura, altura), 0)
@@ -327,31 +362,32 @@ def mascara_poligonos(regioes: List[dict], largura: int, altura: int) -> Image.I
 def mascara_roi(regioes: List[dict], largura: int, altura: int,
                 modo: str = PADRAO["modo"], margem: float = PADRAO["margem"],
                 margem_min: float = PADRAO["margem_min"],
-                transicao: float = PADRAO["transicao"]) -> Image.Image:
+                transicao: float = PADRAO["transicao"],
+                alongamento: float = PADRAO["alongamento"]) -> Image.Image:
     """
     Máscara (L, 0–255) da área protegida. Vale 255 em toda a área protegida
-    (círculo com margem, ou polígono dilatado) e cai suavemente para 0 numa faixa
+    (círculo com margem, ou contorno dilatado) e cai suavemente para 0 numa faixa
     de largura `transicao` POR FORA dela, para não aparecer uma borda dura.
     """
     menor = min(largura, altura)
     t = max(2.0, transicao * menor)
+    circ, pol = separar_regioes(regioes, largura, altura, modo, alongamento)
     m = Image.new("L", (largura, altura), 0)
-    d = ImageDraw.Draw(m)
 
-    if modo == "circulo":
-        for cx, cy, r in circulos_roi(regioes, largura, altura, margem, margem_min):
-            re_ = r + 0.65 * t   # borda borrada (σ = t/4) centrada fora: ≥ 99% de nitidez até r
-            d.ellipse([cx - re_, cy - re_, cx + re_, cy + re_], fill=255)
-    elif modo == "poligono":
-        for reg in regioes:
+    if pol:
+        d = ImageDraw.Draw(m)
+        for reg in pol:
             pts = [(x * largura, y * altura) for x, y in reg["poligono"]]
             if len(pts) >= 3:
                 d.polygon(pts, fill=255)
         # dilatação aproximada (borrar + limiar) para dar a margem em volta da peça
         dil = max(1.0, margem_min * menor + t / 2)
         m = m.filter(ImageFilter.GaussianBlur(dil / 2)).point(lambda v: 255 if v > 12 else 0)
-    else:
-        raise ValueError(f"modo de ROI desconhecido: {modo}")
+
+    d = ImageDraw.Draw(m)
+    for cx, cy, r in circulos_roi(circ, largura, altura, margem, margem_min):
+        re_ = r + 0.65 * t   # borda borrada (σ = t/4) centrada fora: ≥ 99% de nitidez até r
+        d.ellipse([cx - re_, cy - re_, cx + re_, cy + re_], fill=255)
 
     return m.filter(ImageFilter.GaussianBlur(t / 4))
 
@@ -429,7 +465,11 @@ def comprimir_roi(img: Image.Image, regioes: List[dict], lado: int = PADRAO["lad
 
 class CompressorROI:
     """
-    Objeto usado pelo processador do relatório: com anotação -> ROI; sem -> uniforme.
+    Objeto usado pelo processador do relatório:
+      foto marcada no Roboflow           -> ROI pelas marcações
+      sem marcação, tamanho em REGIOES_FIXAS (térmica) -> ROI pela região fixa
+      senão                              -> uniforme
+    `anotacoes` pode ser None (só as regiões fixas).
 
         comp = CompressorROI("anotacoes_roi/", lado=1600, qualidade=80, lado_fundo=400,
                              lado_sem_roi=800, qualidade_sem_roi=45)
@@ -440,22 +480,43 @@ class CompressorROI:
                  lado_fundo=PADRAO["lado_fundo"], qualidade_fundo=PADRAO["qualidade_fundo"],
                  lado_sem_roi=800, qualidade_sem_roi=45,
                  modo=PADRAO["modo"], margem=PADRAO["margem"], margem_min=PADRAO["margem_min"],
-                 transicao=PADRAO["transicao"]):
-        self.anotacoes = anotacoes if isinstance(anotacoes, AnotacoesROI) else AnotacoesROI(anotacoes)
+                 transicao=PADRAO["transicao"], regioes_fixas=None):
+        if anotacoes is None or isinstance(anotacoes, AnotacoesROI):
+            self.anotacoes = anotacoes
+        else:
+            self.anotacoes = AnotacoesROI(anotacoes)
+        self.regioes_fixas = REGIOES_FIXAS if regioes_fixas is None else regioes_fixas
         self.lado, self.qualidade, self.lado_fundo = int(lado), int(qualidade), int(lado_fundo)
         self.qualidade_fundo = int(qualidade_fundo or 0)
         self.lado_sem_roi, self.qualidade_sem_roi = int(lado_sem_roi), int(qualidade_sem_roi)
         self.geo = {"modo": modo, "margem": float(margem), "margem_min": float(margem_min),
                     "transicao": float(transicao)}
-        self.contagem = {"roi": 0, "uniforme": 0}
+        self.contagem = {"roi": 0, "fixa": 0, "uniforme": 0}
+
+    def regioes_para(self, caminho: str) -> Tuple[Optional[List[dict]], str]:
+        """(regiões, origem) com origem 'marcacao', 'fixa' ou ''."""
+        regioes = self.anotacoes.regioes_para(caminho) if self.anotacoes else None
+        if regioes:
+            return regioes, "marcacao"
+        if self.regioes_fixas:
+            try:
+                with Image.open(caminho) as img:      # só lê o cabeçalho
+                    tamanho = img.size
+            except Exception:
+                return None, ""
+            if tamanho in self.regioes_fixas:
+                return self.regioes_fixas[tamanho], "fixa"
+        return None, ""
 
     def comprimir(self, caminho: str) -> Tuple[bytes, bool]:
-        regioes = self.anotacoes.regioes_para(caminho)
+        regioes, origem = self.regioes_para(caminho)
         if regioes:
             img = abrir_imagem(caminho, self.lado)
             dados, _ = comprimir_roi(img, regioes, self.lado, self.qualidade, self.lado_fundo,
                                      self.qualidade_fundo, **self.geo)
             self.contagem["roi"] += 1
+            if origem == "fixa":
+                self.contagem["fixa"] += 1
             return dados, True
         img = abrir_imagem(caminho, self.lado_sem_roi)
         self.contagem["uniforme"] += 1
@@ -476,7 +537,7 @@ def listar_imagens(pasta: str) -> List[str]:
 
 
 def desenhar_conferencia(img: Image.Image, regioes: List[dict], lado: int = 1600, **geo) -> Image.Image:
-    """Foto reduzida com polígono (amarelo), círculo protegido (ciano) e fundo escurecido."""
+    """Foto reduzida com marcação (amarelo), área protegida (borda ciano) e fundo escurecido."""
     base = reduzir(img, lado)
     w, h = base.size
     masc = mascara_roi(regioes, w, h, **geo)
@@ -488,10 +549,10 @@ def desenhar_conferencia(img: Image.Image, regioes: List[dict], lado: int = 1600
         pts = [(x * w, y * h) for x, y in reg["poligono"]]
         if len(pts) >= 2:
             d.line(pts + [pts[0]], fill=(255, 214, 0), width=esp)
-    if geo.get("modo", PADRAO["modo"]) == "circulo":
-        for cx, cy, r in circulos_roi(regioes, w, h, geo.get("margem", PADRAO["margem"]),
-                                      geo.get("margem_min", PADRAO["margem_min"])):
-            d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(0, 220, 255), width=esp)
+    # contorno da área protegida (onde a máscara passa de 50%)
+    borda = masc.point(lambda v: 255 if v > 127 else 0).filter(ImageFilter.FIND_EDGES)
+    borda = borda.filter(ImageFilter.MaxFilter(3 if esp < 3 else 5))
+    saida.paste((0, 220, 255), mask=borda)
     return saida
 
 
@@ -506,10 +567,13 @@ def _cmd_verificar(args) -> int:
     sem_foto = sorted(set(anot.regioes) - chaves_fotos)
     avisos_prop = []
     n = 0
+    comp = CompressorROI(anot)
+    n_fixa = 0
     for p in imagens:
-        regs = anot.regioes_para(p)
+        regs, origem = comp.regioes_para(p)
         if not regs:
             continue
+        n_fixa += origem == "fixa"
         img = abrir_imagem(p)
         aviso = anot.conferir_proporcao(chave_imagem(p), *img.size)
         if aviso:
@@ -519,7 +583,8 @@ def _cmd_verificar(args) -> int:
         n += 1
     if avisos_prop:
         print(f"AVISO ({len(avisos_prop)} fotos): {avisos_prop[0]}")
-    print(f"\nFotos na pasta: {len(imagens)} | com anotação: {n} | sem anotação: {len(imagens) - n}")
+    print(f"\nFotos na pasta: {len(imagens)} | com ROI: {n} (marcação: {n - n_fixa}, região fixa das térmicas: {n_fixa})"
+          f" | sem ROI: {len(imagens) - n}")
     if sem_foto:
         print(f"Anotações sem foto correspondente ({len(sem_foto)}), ex.: {sem_foto[:5]}")
     print("Imagens de conferência em:", os.path.abspath(args.saida))
@@ -552,7 +617,7 @@ def main(argv=None) -> int:
         p.add_argument("--anotacoes", required=True, help="exportação do Roboflow (.json ou pasta)")
         p.add_argument("--imagens", required=True, help="pasta com as fotos originais")
         p.add_argument("--saida", required=True)
-        p.add_argument("--modo", default=PADRAO["modo"], choices=["circulo", "poligono"])
+        p.add_argument("--modo", default=PADRAO["modo"], choices=["auto", "circulo", "poligono"])
         p.add_argument("--margem", type=float, default=PADRAO["margem"])
 
     v = sub.add_parser("verificar", help="desenha as ROIs sobre as fotos para conferir")

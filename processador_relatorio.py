@@ -52,14 +52,16 @@ PASTA_SCRIPT = os.path.dirname(os.path.abspath(__file__))
 #   RELATORIO_ROI_ANOTACOES=/caminho/export  .json COCO ou pasta exportada do Roboflow
 #   RELATORIO_ROI_LADO=1600 RELATORIO_ROI_QUALIDADE=80
 #   RELATORIO_ROI_FUNDO=400 RELATORIO_ROI_QUALIDADE_FUNDO=30
-#   RELATORIO_ROI_MODO=circulo|poligono RELATORIO_ROI_MARGEM=0.15
+#   RELATORIO_ROI_MODO=auto|circulo|poligono RELATORIO_ROI_MARGEM=0.15
+#   RELATORIO_ROI_TERMICA=0    desliga a região fixa da escala nas térmicas (1158×768)
 ROI_LIGADA = os.environ.get("RELATORIO_ROI", "1") == "1"
 ROI_ANOTACOES = os.environ.get("RELATORIO_ROI_ANOTACOES", os.path.join(PASTA_SCRIPT, "anotacoes_roi"))
 ROI_LADO = int(os.environ.get("RELATORIO_ROI_LADO", "1600"))
 ROI_QUALIDADE = int(os.environ.get("RELATORIO_ROI_QUALIDADE", "80"))
 ROI_FUNDO = int(os.environ.get("RELATORIO_ROI_FUNDO", "400"))
 ROI_QUALIDADE_FUNDO = int(os.environ.get("RELATORIO_ROI_QUALIDADE_FUNDO", "30"))
-ROI_MODO = os.environ.get("RELATORIO_ROI_MODO", "circulo")
+ROI_MODO = os.environ.get("RELATORIO_ROI_MODO", "auto")
+ROI_TERMICA = os.environ.get("RELATORIO_ROI_TERMICA", "1") == "1"
 ROI_MARGEM = float(os.environ.get("RELATORIO_ROI_MARGEM", "0.15"))
 
 try:
@@ -263,19 +265,26 @@ def carregar_compressor_roi(cfg):
     """Lê as anotações a cada relatório (dá para atualizar sem reiniciar o servidor)."""
     if cfg["modo"] != "roi":
         return None
-    if compressor_roi is None or not os.path.exists(ROI_ANOTACOES):
+    if compressor_roi is None:
+        raise RuntimeError("condição com ROI, mas o arquivo compressor_roi.py não está junto do servidor")
+    tem_marcacoes = os.path.exists(ROI_ANOTACOES)
+    if not tem_marcacoes and not ROI_TERMICA:
         raise RuntimeError(f"condição {cfg['condicao']} pede ROI, mas não há anotações em {ROI_ANOTACOES}")
+    if not tem_marcacoes:
+        print("AVISO: sem anotações do Roboflow; ROI só na escala das térmicas")
     return compressor_roi.CompressorROI(
-        ROI_ANOTACOES, lado=cfg["roi_lado"], qualidade=cfg["roi_qualidade"],
+        ROI_ANOTACOES if tem_marcacoes else None,
+        lado=cfg["roi_lado"], qualidade=cfg["roi_qualidade"],
         lado_fundo=cfg["roi_fundo"], qualidade_fundo=cfg["roi_qualidade_fundo"],
         lado_sem_roi=cfg["lado"], qualidade_sem_roi=cfg["qualidade"],
-        modo=cfg.get("roi_modo", "circulo"), margem=ROI_MARGEM)
+        modo=cfg.get("roi_modo", "auto"), margem=ROI_MARGEM,
+        regioes_fixas=None if ROI_TERMICA else {})
 
 
 def info_roi():
     """Resumo para a interface web."""
     info = {"ativa": ROI_ATIVA, "caminho": ROI_ANOTACOES, "imagens_anotadas": 0,
-            "config": CONFIG_PADRAO["condicao"]}
+            "config": CONFIG_PADRAO["condicao"], "termica": bool(ROI_TERMICA and compressor_roi)}
     if ROI_ATIVA:
         try:
             info["imagens_anotadas"] = len(compressor_roi.AnotacoesROI(ROI_ANOTACOES))
@@ -552,6 +561,7 @@ def gerar_relatorio_nativo(caminho_missao, condicao=None):
     ultima_execucao.update({
         "imagens": len(imagens),
         "imagens_roi": _compressor.contagem["roi"] if _compressor else 0,
+        "imagens_roi_termica": _compressor.contagem["fixa"] if _compressor else 0,
         "bytes_fotos": (sum(os.path.getsize(c) for c in imagens) if original
                         else sum(len(v) for v in imagens_comprimidas.values())),
         "bytes_pdf": len(pdf_memoria.getvalue()),

@@ -61,9 +61,9 @@ def ler_configs(uniformes: str, rois: str, modo: str, margem: float):
         c = configuracoes.ler_condicao(item)
         configs.append({"nome": c["condicao"], "tipo": "uniforme", "lado": c["lado"], "qualidade": c["qualidade"]})
     for item in filter(None, (x.strip() for x in rois.split(","))):
-        item = item.replace(":poligono", "+pol")
-        if modo == "poligono" and "+pol" not in item:
-            item += "+pol"
+        item = item.replace(":poligono", "+pol").replace(":circulo", "+circ")
+        if "+" not in item and modo != "auto":
+            item += {"poligono": "+pol", "circulo": "+circ"}[modo]
         c = configuracoes.ler_condicao("roi:" + item)
         configs.append({"nome": c["condicao"], "tipo": "roi", "lado": c["roi_lado"], "qualidade": c["roi_qualidade"],
                         "fundo": c["roi_fundo"], "qualidade_fundo": c["roi_qualidade_fundo"],
@@ -195,7 +195,8 @@ def figura_compromisso(resumo, destino):
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=cor, lw=1.5, marker=marca,
                 ms=5, mec="white", mew=1, label=rotulo, zorder=3)
         for i, (x, y, nome) in enumerate(pts):
-            rot = nome.replace("roi:", "").replace("+pol", " pol") + ("*" if nome.endswith("/0") else "")
+            rot = nome.replace("roi:", "").replace("+pol", " pol").replace("+circ", " circ") \
+                + ("*" if nome.endswith("/0") else "")
             if tipo == "roi":   # acima/abaixo alternado para não encavalar
                 xy, ha = ((0, 6) if i % 2 == 0 else (0, -11)), "center"
             else:
@@ -305,7 +306,7 @@ def main(argv=None):
     ap.add_argument("--saida", required=True)
     ap.add_argument("--uniformes", default=UNIFORMES_PADRAO, help="lista L/Q")
     ap.add_argument("--roi", default=ROI_PADRAO, help="lista L/Q (fundo L/4, Q30) ou L/Q/F/QF; '+pol' usa o polígono")
-    ap.add_argument("--modo", default="circulo", choices=["circulo", "poligono"])
+    ap.add_argument("--modo", default="auto", choices=["auto", "circulo", "poligono"])
     ap.add_argument("--margem", type=float, default=cr.PADRAO["margem"])
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--limite", type=int, default=0, help="usa só as N primeiras fotos (teste rápido)")

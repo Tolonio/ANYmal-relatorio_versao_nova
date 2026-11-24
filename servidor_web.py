@@ -126,7 +126,8 @@ CAMPOS_REGISTRO = [
     "duracao_s",
     "taxa_media_Mbps",
     "imagens",              # fotos na missão
-    "imagens_roi",          # quantas foram comprimidas por ROI
+    "imagens_roi",          # quantas foram comprimidas por ROI (marcação + térmicas)
+    "imagens_roi_termica",  # dessas, quantas pela região fixa da escala térmica
     "t_traducao_s",         # tempos de cada etapa do processamento
     "t_compressao_s",
     "t_pdf_s",
@@ -135,7 +136,7 @@ CAMPOS_REGISTRO = [
     "observacao",
 ]
 
-CAMPOS_ETAPAS = ("imagens", "imagens_roi", "t_traducao_s", "t_compressao_s", "t_pdf_s", "t_zip_s")
+CAMPOS_ETAPAS = ("imagens", "imagens_roi", "imagens_roi_termica", "t_traducao_s", "t_compressao_s", "t_pdf_s", "t_zip_s")
 
 
 def registrar(**dados):

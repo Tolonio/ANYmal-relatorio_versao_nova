@@ -7,7 +7,9 @@ Condições de compressão de um relatório, escritas como texto curto.
                           suavizado (lado/4 = 300 px, pré-quantizado com Q30).
                           Fotos sem marcação (térmicas) saem iguais ao 1200/70.
     roi:1600/85/400/30    ROI explícita: lado/qualidade/fundo/qualidade do fundo
-    roi:1600/85+pol       ROI pelo polígono dilatado em vez do círculo
+    roi:1600/85+pol       força o contorno (polígono dilatado) em todas as peças
+    roi:1600/85+circ      força o círculo em todas as peças
+                          (padrão: círculo nas peças compactas, contorno nas alongadas)
 
 A comparação "1200/70" × "roi:1200/70" isola o efeito da ROI: a peça e as fotos
 sem marcação ficam idênticas; só o fundo das fotos marcadas muda.
@@ -26,7 +28,7 @@ CONDICOES_ARTIGO = ["original", "600/35", "800/45", "1200/70", "1600/85",
 FUNDO_FRACAO = 4          # fundo = lado / 4
 QUALIDADE_FUNDO = 30
 
-_RE = re.compile(r"^(?:(?P<roi>roi):)?(?P<nums>\d+(?:/\d+){1,3})(?P<pol>\+pol)?$")
+_RE = re.compile(r"^(?:(?P<roi>roi):)?(?P<nums>\d+(?:/\d+){1,3})(?:\+(?P<forma>pol|circ))?$")
 
 
 def ler_condicao(texto: str) -> dict:
@@ -42,7 +44,7 @@ def ler_condicao(texto: str) -> dict:
     if not (64 <= lado <= 8000 and 1 <= qualidade <= 100):
         raise ValueError(f"lado/qualidade fora da faixa em {texto!r}")
     if not m.group("roi"):
-        if len(nums) != 2 or m.group("pol"):
+        if len(nums) != 2 or m.group("forma"):
             raise ValueError(f"condição uniforme é só L/Q: {texto!r}")
         return {"modo": "uniforme", "lado": lado, "qualidade": qualidade, "condicao": f"{lado}/{qualidade}"}
 
@@ -51,7 +53,7 @@ def ler_condicao(texto: str) -> dict:
     cfg = {"modo": "roi", "lado": lado, "qualidade": qualidade,
            "roi_lado": lado, "roi_qualidade": qualidade,
            "roi_fundo": fundo, "roi_qualidade_fundo": qf,
-           "roi_modo": "poligono" if m.group("pol") else "circulo"}
+           "roi_modo": {"pol": "poligono", "circ": "circulo"}.get(m.group("forma"), "auto")}
     cfg["condicao"] = nome_curto(cfg)
     return cfg
 
@@ -66,8 +68,7 @@ def nome_curto(cfg: dict) -> str:
     padrao_fundo = max(64, cfg["roi_lado"] // FUNDO_FRACAO)
     if cfg["roi_fundo"] != padrao_fundo or cfg["roi_qualidade_fundo"] != QUALIDADE_FUNDO:
         s += f"/{cfg['roi_fundo']}/{cfg['roi_qualidade_fundo']}"
-    if cfg.get("roi_modo") == "poligono":
-        s += "+pol"
+    s += {"poligono": "+pol", "circulo": "+circ"}.get(cfg.get("roi_modo"), "")
     return s
 
 
@@ -81,8 +82,7 @@ def nome_arquivo(cfg: dict) -> str:
     s = f"roi{cfg['roi_lado']}q{cfg['roi_qualidade']}f{cfg['roi_fundo']}"
     if cfg["roi_qualidade_fundo"]:
         s += f"qf{cfg['roi_qualidade_fundo']}"
-    if cfg.get("roi_modo") == "poligono":
-        s += "pol"
+    s += {"poligono": "pol", "circulo": "circ"}.get(cfg.get("roi_modo"), "")
     if (cfg["lado"], cfg["qualidade"]) != (cfg["roi_lado"], cfg["roi_qualidade"]):
         s = base + "_" + s
     return s

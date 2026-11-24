@@ -36,7 +36,17 @@ Servidor Flask que roda no ANYmal: navega pelas missões, gera o relatório trad
 | `1200/70` | uniforme: toda foto cabe em 1200×1200, JPEG qualidade 70 |
 | `roi:1200/70` | a peça marcada em 1200/70; o fundo é reduzido para 300 px (L/4), ampliado de volta e pré-quantizado com Q30. Fotos sem marcação (térmicas) saem iguais à `1200/70` |
 | `roi:1600/80/400/30` | ROI explícita: lado / qualidade / fundo / qualidade do fundo (0 = sem pré-quantização) |
-| `roi:1600/85+pol` | protege o polígono dilatado em vez do círculo mínimo |
+| `roi:1600/85+pol` | força o contorno (polígono dilatado) em todas as peças |
+| `roi:1600/85+circ` | força o círculo mínimo em todas as peças |
+
+**Forma da área protegida** (padrão automático): peças compactas (parafusos, visor) ganham
+o menor círculo que as contém, com margem; peças alongadas (escala térmica), cujo círculo
+teria mais de 2,5× a área da peça, ficam protegidas pelo próprio contorno, com margem.
+
+**Térmicas:** toda foto 1158×768 tem a **escala de temperatura** (min/max/spot e a coluna
+de números, faixa da direita, x de 0,86 a 1,0) protegida automaticamente, **mesmo sem
+marcação e em missões novas**: a câmera desenha essa faixa sempre no mesmo lugar (confirmado
+nas 25 térmicas marcadas). Para desligar: `RELATORIO_ROI_TERMICA=0`.
 
 `1200/70` × `roi:1200/70` isola o efeito da ROI: a peça e as fotos sem marcação são
 idênticas e só muda o fundo das fotos marcadas.
@@ -60,6 +70,19 @@ idênticas e só muda o fundo das fotos marcadas.
   deu 3,3 e 4,0). A ROI não compensa nesses níveis.
 * O polígono (`+pol`) economiza ~7% a mais que o círculo, até ~25% em peças grandes e
   alongadas (sílica).
+
+Térmicas (25 fotos, métricas só na faixa da escala):
+
+| Nível | Uniforme (KB/foto) | ROI (KB/foto) | PSNR na escala |
+|---|---|---|---|
+| 600/35 | 14,3 | 12,3 | 17,7 dB |
+| 800/45 | 24,8 | 21,1 | 19,2 dB |
+| 1200/70 | 62,2 | 45,4 | 36,9 dB |
+| 1600/85 | 74,0 | 54,5 | 39,9 dB |
+
+Em 600/35 e 800/45 a escala perde qualidade pela **redução** (1158 → 600 px), não pela
+compressão: os números ainda se leem, mas serrilhados. A partir de 1200 a térmica
+não é reduzida e a escala fica igual à original.
 
 **Matriz sugerida** (5 condições × 3 repetições, missão de 169 imagens):
 `original 600/35 1200/70 roi:1200/70 roi:1600/85`. Ela responde se a ROI entrega a peça
@@ -85,15 +108,11 @@ python3 servidor_web.py
 
 (`deep-translator` só é necessário com `RELATORIO_TRADUCAO_ONLINE=1`.)
 
-**Anotações de ROI:** exporte do Roboflow em **COCO**, sem augmentation e sem Resize, e
-copie o `_annotations.coco.json` para `anotacoes_roi/` no robô:
-
-```bash
-scp anotacoes_roi/_annotations.coco.json integration@anymal-<nome>-npc:/home/integration/ANYmal-relatorio_versao_nova/anotacoes_roi/
-```
-
-`anotacoes_roi/` está no `.gitignore`: as marcações e as fotos da planta não vão para o
-repositório público. A ligação marcação ↔ foto é pelo nome do arquivo. Confira antes de medir:
+**Anotações de ROI:** já vêm no repositório, em `anotacoes_roi/_annotations.coco.json`
+(export v2 do Roboflow: 99 fotos RGB e 25 térmicas da missão de 2026-05-20; só nomes de
+arquivo e coordenadas, sem fotos). Para trocar, exporte do Roboflow em **COCO**, sem
+augmentation e sem Resize, e substitua esse arquivo. A ligação marcação ↔ foto das RGB
+é pelo nome do arquivo. Confira antes de medir:
 
 ```bash
 python3 compressor_roi.py verificar --anotacoes anotacoes_roi/ --imagens <pasta resources> --saida conferencia/

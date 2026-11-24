@@ -145,7 +145,7 @@ def test_augmentation_duplicada_gera_aviso(tmp_path):
 
 def test_mascara_protege_circulo_inteiro():
     regs = [{"classe": "p", "poligono": [(0.5, 0.4), (0.52, 0.4), (0.52, 0.6), (0.5, 0.6)]}]
-    m = np.asarray(cr.mascara_roi(regs, W, H))
+    m = np.asarray(cr.mascara_roi(regs, W, H, modo="circulo"))
     cx, cy, r = cr.circulos_roi(regs, W, H)[0]
     yy, xx = np.mgrid[0:H, 0:W]
     d = np.hypot(xx - cx, yy - cy)
@@ -421,3 +421,48 @@ def test_experimento_pc_ponta_a_ponta(modulos, missao, tmp_path):
         assert len(list((saida / "coletor").glob("*.csv"))) == 4
     finally:
         srv.shutdown()
+
+
+# ------------------------------------------------------------
+# forma automática e região fixa das térmicas
+# ------------------------------------------------------------
+
+def test_auto_circulo_nas_compactas_contorno_nas_alongadas():
+    quadrado = {"classe": "p", "poligono": [(0.4, 0.4), (0.45, 0.4), (0.45, 0.48), (0.4, 0.48)]}
+    faixa = {"classe": "t", "poligono": [(0.86, 0.0), (1.0, 0.0), (1.0, 1.0), (0.86, 1.0)]}
+    circ, pol = cr.separar_regioes([quadrado, faixa], 1158, 768)
+    assert circ == [quadrado] and pol == [faixa]
+    # a faixa protegida pelo contorno ocupa bem menos que pelo círculo
+    auto = np.asarray(cr.mascara_roi([faixa], 1158, 768)).mean()
+    so_circ = np.asarray(cr.mascara_roi([faixa], 1158, 768, modo="circulo")).mean()
+    assert auto < 0.5 * so_circ
+    m = np.asarray(cr.mascara_roi([faixa], 1158, 768))
+    assert m[:, int(0.88 * 1158):].min() >= 250          # números da escala inteiros e nítidos
+    assert m[:, : int(0.75 * 1158)].max() == 0           # resto da térmica é fundo
+
+
+def test_termica_sem_marcacao_usa_regiao_fixa(tmp_path):
+    img, _ = foto(5, 1158, 768)
+    caminho = tmp_path / "2026-12-01-10-00-00-000000001_Image0.jpg"   # missão nova, sem marcação
+    img.save(caminho, quality=92)
+    comp = cr.CompressorROI(None, lado=1200, qualidade=70, lado_fundo=300)
+    regs, origem = comp.regioes_para(str(caminho))
+    assert origem == "fixa" and regs[0]["classe"] == "escala_termica"
+    com, usou = comp.comprimir(str(caminho))
+    assert usou and comp.contagem == {"roi": 1, "fixa": 1, "uniforme": 0}
+    sem = cr.comprimir_uniforme(cr.abrir_imagem(str(caminho)), 1200, 70)
+    assert len(com) < len(sem)
+    # a escala sai idêntica à da uniforme na mesma qualidade (só o fundo muda)
+    a = np.asarray(Image.open(io.BytesIO(com)).convert("L"), float)[:, 1020:]
+    b = np.asarray(Image.open(io.BytesIO(sem)).convert("L"), float)[:, 1020:]
+    assert np.abs(a - b).mean() < 1.0
+    # desligável
+    assert cr.CompressorROI(None, regioes_fixas={}).regioes_para(str(caminho)) == (None, "")
+
+
+def test_condicao_forma():
+    import configuracoes as cf
+    assert cf.ler_condicao("roi:1200/70")["roi_modo"] == "auto"
+    c = cf.ler_condicao("roi:1200/70+circ")
+    assert c["roi_modo"] == "circulo" and c["condicao"] == "roi:1200/70+circ"
+    assert cf.nome_arquivo(c).endswith("circ")
