@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% set aba = 'relatorios' %}
+{% block titulo %}Relatórios salvos{% endblock %}
+{% block conteudo %}
+<h1>Relatórios salvos no robô</h1>
+<p class="sub">Pacotes ZIP já gerados (PDF traduzido + fotos). Estimativa de download com o link livre a {{ link_mbps }} Mbit/s.</p>
+
+<div class="cartao" style="padding:6px 10px">
+  <table class="lista">
+    <thead>
+      <tr>
+        <th>Relatório</th>
+        <th class="esconde-celular">Gerado em</th>
+        <th class="direita">Tamanho</th>
+        <th class="direita esconde-celular">Estimativa</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for a in arquivos %}
+      <tr>
+        <td>
+          <div style="font-weight:500;word-break:break-all">{{ a.missao }}</div>
+          <div class="muted">{% if a.roi %}<span class="selo" style="font-size:11px;padding:1px 7px">ROI</span> {% endif %}{{ a.config }}</div>
+        </td>
+        <td class="num muted esconde-celular">{{ a.data }}</td>
+        <td class="num direita">{{ a.mb }} MB</td>
+        <td class="num direita muted esconde-celular">{{ a.estimativa }}</td>
+        <td class="direita">
+          <a class="botao sec" href="{{ url_for('baixar_relatorio', nome=a.nome) }}" title="{{ a.nome }}">Baixar</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted" style="text-align:center;padding:28px">Nenhum relatório salvo ainda.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

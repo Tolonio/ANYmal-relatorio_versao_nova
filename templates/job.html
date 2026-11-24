@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% set aba = 'missoes' %}
+{% block titulo %}Gerando relatório{% endblock %}
+{% block cabeca %}
+<style>
+  .etapa { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+  .etapa .n {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 700; background: #eef0f0; color: var(--tinta-3);
+  }
+  .etapa.atual .n { background: var(--verde); color: #fff; }
+  .etapa.feita .n { background: var(--verde-claro); color: var(--verde); }
+  .etapa.falhou .n { background: #fbe9e7; color: var(--erro); }
+  .linha-info { display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--tinta-2); font-size: 14px; }
+  .linha-info b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+  .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
+  .metricas div { background: var(--fundo); border-radius: 8px; padding: 10px 12px; }
+  .metricas span { display: block; font-size: 12px; color: var(--tinta-3); }
+  .metricas b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .dica { font-size: 13px; color: var(--tinta-3); margin-top: 12px; }
+  #conexao { color: #7a5600; font-size: 13px; min-height: 1.2em; }
+</style>
+{% endblock %}
+{% block conteudo %}
+<h1 id="titulo">Gerando relatório</h1>
+<p class="sub" id="missao">{{ missao }} · condição <b>{{ condicao }}</b></p>
+
+<section class="cartao etapa atual" id="caixa_proc">
+  <div class="n">1</div>
+  <div>
+    <h2>Processamento no robô <span class="selo neutro" id="selo_proc">em andamento</span></h2>
+    <div class="barra"><div id="barra_proc"></div></div>
+    <div class="linha-info">
+      <span id="texto_proc">Iniciando…</span>
+      <span id="tempo_proc"></span>
+    </div>
+    <div class="metricas" id="metricas_proc" hidden></div>
+  </div>
+</section>
+
+<section class="cartao etapa" id="caixa_down">
+  <div class="n">2</div>
+  <div>
+    <h2>Download <span class="selo neutro" id="selo_down">aguardando</span></h2>
+    <div class="barra"><div id="barra_down"></div></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px">
+      <div>
+        <div class="muted">Tempo restante</div>
+        <div class="grande" id="eta">—</div>
+      </div>
+      <a class="botao" id="botao" href="#" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+        Baixar relatório
+      </a>
+    </div>
+    <div class="linha-info" style="margin-top:8px">
+      <span id="texto_down"></span>
+      <span id="estimativa"></span>
+    </div>
+    <p class="dica">O arquivo fica salvo no robô. Se o download cair, use “Retomar” no gerenciador
+      de downloads do navegador: ele continua de onde parou.
+      Todos os relatórios: <a href="{{ url_for('lista_relatorios') }}">Relatórios salvos</a>.</p>
+  </div>
+</section>
+
+<div id="conexao" role="status"></div>
+
+<script>
+const jobId = "{{ job_id }}";
+let downloadDisparado = false;
+const $ = (id) => document.getElementById(id);
+
+function tempo(s) {
+  if (s === null || s === undefined || !isFinite(s)) return "—";
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  if (h > 0) return h + " h " + m + " min";
+  return m > 0 ? m + " min " + r + " s" : r + " s";
+}
+function mb(b) { return (b / 1048576).toFixed(2) + " MB"; }
+function selo(id, texto, classe) { const e = $(id); e.textContent = texto; e.className = "selo " + (classe || ""); }
+function etapa(id, estado) { $(id).className = "cartao etapa " + estado; }
+
+async function atualizar() {
+  try {
+    const r = await fetch("/api/job/" + jobId, { cache: "no-store" });
+    const j = await r.json();
+    $("conexao").textContent = "";
+    mostrar(j);
+  } catch (e) {
+    $("conexao").textContent = "Sem resposta do robô, tentando de novo…";
+  }
+  setTimeout(atualizar, 1000);
+}
+
+function metricas(j) {
+  const itens = [["Tamanho do pacote", mb(j.tamanho_bytes)],
+                 ["Tempo de processamento", tempo(j.tempo_processamento_s)]];
+  if (j.imagens != null) itens.push(["Fotos", j.imagens]);
+  if (j.imagens_roi) itens.push(["Fotos com ROI", j.imagens_roi + " de " + j.imagens]);
+  if (j.t_compressao_s != null) itens.push(["Compressão das fotos", tempo(j.t_compressao_s)]);
+  if (j.t_pdf_s != null) itens.push(["Montagem do PDF", tempo(j.t_pdf_s)]);
+  const caixa = $("metricas_proc");
+  caixa.replaceChildren(...itens.map(([k, v]) => {
+    const d = document.createElement("div");
+    const s = document.createElement("span"); s.textContent = k;
+    const b = document.createElement("b"); b.textContent = v;
+    d.append(s, b); return d;
+  }));
+  caixa.hidden = false;
+}
+
+function mostrar(j) {
+  if (j.etapa === "desconhecido") {
+    $("texto_proc").textContent = "O servidor foi reiniciado. Os relatórios já gerados estão em Relatórios salvos.";
+    selo("selo_proc", "perdido", "alerta");
+    return;
+  }
+
+  if (j.etapa === "na_fila") {
+    selo("selo_proc", "na fila", "neutro");
+    $("texto_proc").textContent = j.a_frente > 0
+      ? "Aguardando: " + j.a_frente + (j.a_frente === 1 ? " relatório" : " relatórios") + " na frente"
+      : "Começando…";
+    return;
+  }
+  if (j.etapa === "cancelado") {
+    selo("selo_proc", "cancelado", "alerta");
+    $("texto_proc").textContent = "Este relatório foi tirado da fila.";
+    return;
+  }
+
+  if (j.etapa === "processando") {
+    selo("selo_proc", "em andamento", "neutro");
+    const pct = j.pct || 0;
+    $("barra_proc").style.width = pct + "%";
+    $("texto_proc").textContent = (j.mensagem || "Processando…") + (j.pct != null ? " (" + pct.toFixed(0) + "%)" : "");
+    $("tempo_proc").textContent = "Decorrido " + tempo(j.decorrido_s) +
+      (j.eta_processamento_s != null ? " · faltam ~" + tempo(j.eta_processamento_s) : "");
+    return;
+  }
+
+  if (j.etapa === "erro") {
+    etapa("caixa_proc", "falhou");
+    selo("selo_proc", "erro", "alerta");
+    $("texto_proc").className = "erro";
+    $("texto_proc").textContent = "Erro no processamento: " + j.erro;   // textContent: sem injeção de HTML
+    $("titulo").textContent = "Falha ao gerar o relatório";
+    return;
+  }
+
+  // pronto
+  etapa("caixa_proc", "feita");
+  selo("selo_proc", "concluído");
+  $("barra_proc").style.width = "100%";
+  $("texto_proc").textContent = "Relatório pronto";
+  $("tempo_proc").textContent = "";
+  metricas(j);
+  $("titulo").textContent = "Relatório pronto";
+
+  $("botao").href = j.url_download;
+  $("botao").hidden = false;
+  $("estimativa").textContent = "Estimativa a " + j.link_mbps + " Mbit/s com o link livre: " + tempo(j.estimativa_download_s);
+
+  if (!j.download && !downloadDisparado) {
+    downloadDisparado = true;
+    window.location.href = j.url_download;   // começa o download automaticamente
+  }
+
+  const d = j.download;
+  if (!d) { etapa("caixa_down", "atual"); return; }
+  $("barra_down").style.width = d.pct + "%";
+  if (d.concluido) {
+    etapa("caixa_down", "feita");
+    selo("selo_down", "concluído");
+    $("eta").textContent = "Concluído";
+    $("texto_down").textContent = mb(d.tamanho_bytes) + " em " + tempo(d.decorrido_s);
+  } else if (d.ativo) {
+    etapa("caixa_down", "atual");
+    selo("selo_down", "baixando", "neutro");
+    $("eta").textContent = tempo(d.eta_s);
+    $("texto_down").textContent = mb(d.recebido_bytes) + " de " + mb(d.tamanho_bytes) + " (" + d.pct + "%)" +
+      (d.taxa_Mbps != null ? " · " + d.taxa_Mbps.toFixed(2) + " Mbit/s" : "");
+  } else {
+    etapa("caixa_down", "falhou");
+    selo("selo_down", "interrompido", "alerta");
+    $("eta").textContent = "Interrompido";
+    $("texto_down").textContent = "Parou em " + mb(d.recebido_bytes) + " de " + mb(d.tamanho_bytes) +
+      ". Retome pelo gerenciador de downloads do navegador.";
+  }
+}
+
+atualizar();
+</script>
+{% endblock %}

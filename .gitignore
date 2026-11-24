@@ -1,0 +1,13 @@
+# dados da planta: não vão para o repositório público
+anotacoes_roi/
+conferencia/
+resultados*/
+experimento*/
+!experimento_pc.py
+*.zip
+
+# gerados
+cache_traducoes.json
+venv/
+__pycache__/
+.pytest_cache/

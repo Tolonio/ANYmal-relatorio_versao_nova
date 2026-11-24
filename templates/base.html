@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Relatórios ANYmal{% endblock %} · ITV</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<style>
+  /* Sem fontes nem bibliotecas externas: a página passa pelo link limitado do robô. */
+  :root {
+    --verde: #00786b;        /* ITV */
+    --verde-escuro: #005a50;
+    --verde-claro: #e3f1ef;
+    --amarelo: #f0b323;      /* ITV */
+    --vermelho: #e2412c;     /* ANYmal */
+    --tinta: #1f2a2c;
+    --tinta-2: #4f5b5d;
+    --tinta-3: #7a8587;
+    --linha: #dfe4e4;
+    --fundo: #f3f5f5;
+    --cartao: #ffffff;
+    --erro: #b3261e;
+    --raio: 10px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--tinta);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  }
+  a { color: var(--verde); }
+
+  /* ---------- cabeçalho ---------- */
+  .topo { background: var(--cartao); border-bottom: 1px solid var(--linha); }
+  .topo-in {
+    max-width: 1040px; margin: 0 auto; padding: 10px 20px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .topo .itv { height: 44px; width: auto; display: block; }
+  .topo .sep { width: 1px; align-self: stretch; background: var(--linha); margin: 4px 0; }
+  .topo .marca { line-height: 1.2; }
+  .topo .marca b { display: block; font-size: 17px; letter-spacing: .01em; }
+  .topo .marca span { font-size: 13px; color: var(--tinta-3); }
+  .topo nav { margin-left: auto; display: flex; gap: 6px; }
+  .topo nav a {
+    text-decoration: none; color: var(--tinta-2); font-size: 14px; font-weight: 500;
+    padding: 7px 12px; border-radius: 8px;
+  }
+  .topo nav a:hover, .topo nav a.ativo { background: var(--verde-claro); color: var(--verde-escuro); }
+  .topo .robo { height: 58px; width: auto; display: block; margin: -6px 0 -6px 4px; }
+  .faixa { height: 4px; background: linear-gradient(90deg, var(--verde) 0 82%, var(--amarelo) 82% 100%); }
+
+  main { max-width: 1040px; margin: 24px auto 40px; padding: 0 20px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--tinta-3); margin: 0 0 18px; font-size: 14px; }
+
+  .cartao {
+    background: var(--cartao); border: 1px solid var(--linha); border-radius: var(--raio);
+    padding: 18px 20px; margin: 0 0 16px;
+  }
+  .cartao h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+
+  /* ---------- selos e botões ---------- */
+  .selo {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px; background: var(--verde-claro); color: var(--verde-escuro);
+    white-space: nowrap;
+  }
+  .selo.neutro { background: #eef0f0; color: var(--tinta-2); }
+  .selo.alerta { background: #fdf3dc; color: #7a5600; }
+  .ponto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+  .botao {
+    display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer;
+    background: var(--verde); color: #fff; font: inherit; font-weight: 600; font-size: 14px;
+    padding: 8px 14px; border-radius: 8px; text-decoration: none; white-space: nowrap;
+  }
+  .botao:hover { background: var(--verde-escuro); }
+  .botao.sec { background: transparent; color: var(--verde-escuro); box-shadow: inset 0 0 0 1px var(--linha); }
+  .botao.sec:hover { background: var(--verde-claro); }
+  .botao svg { width: 16px; height: 16px; }
+
+  /* ---------- tabelas/listas ---------- */
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+       color: var(--tinta-3); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--linha); }
+  td { padding: 10px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .direita { text-align: right; }
+  .muted { color: var(--tinta-3); font-size: 13px; }
+
+  /* ---------- barras de progresso ---------- */
+  .barra { background: #e8ecec; border-radius: 999px; height: 10px; overflow: hidden; margin: 10px 0 8px; }
+  .barra div { background: var(--verde); height: 100%; width: 0; border-radius: 999px; transition: width .6s ease; }
+  .barra.ok div { background: var(--verde); }
+  .grande { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .erro { color: var(--erro); }
+
+  footer { max-width: 1040px; margin: 0 auto 30px; padding: 0 20px; color: var(--tinta-3); font-size: 12.5px; }
+
+  @media (max-width: 680px) {
+    .topo-in { padding: 8px 14px; gap: 10px; }
+    .topo .itv { height: 32px; }
+    .topo .marca, .topo .sep { display: none; }
+    .topo .robo { height: 40px; margin: -4px 0; }
+    .topo nav { gap: 2px; }
+    .topo nav a { padding: 6px 8px; font-size: 13px; }
+    main { padding: 0 14px; margin-top: 18px; }
+    .esconde-celular { display: none; }
+    /* linhas da tabela viram blocos: nome em cima, botão embaixo à direita */
+    table.lista tr { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+                     border-bottom: 1px solid var(--linha); padding: 6px 0; }
+    table.lista tr:last-child { border-bottom: 0; }
+    table.lista td { border: 0; padding: 4px 4px; }
+    table.lista td:first-child { flex: 1 1 100%; }
+    .item a.nome { word-break: normal; overflow-wrap: anywhere; }
+  }
+</style>
+{% block cabeca %}{% endblock %}
+</head>
+<body>
+<header class="topo">
+  <div class="topo-in">
+    <img class="itv" src="{{ url_for('static', filename='logo_itv.png') }}" alt="Instituto Tecnológico Vale" width="165" height="44">
+    <div class="sep"></div>
+    <div class="marca">
+      <b>Relatórios de Inspeção</b>
+      <span>Robô quadrúpede ANYmal</span>
+    </div>
+    <nav>
+      <a href="{{ url_for('index') }}" class="{% if aba == 'missoes' %}ativo{% endif %}">Missões</a>
+      <a href="{{ url_for('pagina_fila') }}" class="{% if aba == 'fila' %}ativo{% endif %}">Fila{% if n_fila %} <span class="selo" style="padding:0 7px;font-size:11px">{{ n_fila }}</span>{% endif %}</a>
+      <a href="{{ url_for('lista_relatorios') }}" class="{% if aba == 'relatorios' %}ativo{% endif %}">Relatórios<span class="esconde-celular"> salvos</span></a>
+    </nav>
+    <img class="robo" src="{{ url_for('static', filename='anymal.png') }}" alt="ANYmal" width="58" height="58">
+  </div>
+  <div class="faixa"></div>
+</header>
+
+<main>
+{% block conteudo %}{% endblock %}
+</main>
+
+<footer>
+  Instituto Tecnológico Vale · servidor local do ANYmal · configuração <b>{{ config }}</b>
+</footer>
+</body>
+</html>

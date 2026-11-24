@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Processamento não encontrado{% endblock %}
+{% block conteudo %}
+<h1>Processamento não encontrado</h1>
+<div class="cartao">
+  <p style="margin:0 0 14px">O servidor provavelmente foi reiniciado. Os relatórios já gerados continuam salvos no robô.</p>
+  <a class="botao" href="{{ url_for('lista_relatorios') }}">Ver relatórios salvos</a>
+  <a class="botao sec" href="{{ url_for('index') }}">Voltar às missões</a>
+</div>
+{% endblock %}
