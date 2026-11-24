@@ -11,7 +11,8 @@
 # Por que "destino": o modo do artigo põe o tbf na raiz da interface do computador de
 # navegação, então limita também o tráfego interno do robô (LiDAR, câmeras, ROS entre os
 # computadores de bordo), que na planta NÃO passa pelo link de 3 Mbit/s. No diagnóstico de
-# 24/11/2026 eram ~4.300 pacotes/s pequenos de 192.168.0.169 para 192.168.0.168: a fila do
+# 24/11/2026 eram ~4.300 pacotes/s pequenos do NPC (192.168.0.169) para o LPC, o computador de
+# locomoção (192.168.0.168, anymal-d021-lpc): a fila do
 # netem (140 PACOTES) ficava sempre cheia deles (138/140) e recusava os pacotes do relatório
 # ainda dentro do robô, então o TCP quase não enviava (0,08 Mbit/s, sem retransmissões).
 # O modo "destino" limita só o que vai para o PC (e para outros IPs da planta que você

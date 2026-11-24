@@ -379,7 +379,10 @@ sudo bash rede/diagnostico_rede.sh <IP_DO_PC>
 **Causa.** Sem nenhum download, o computador de navegação (192.168.0.169) envia pela
 `enp0s31f6` **~4.260 pacotes/s** de 41 B em média (3,8 Mbit/s com cabeçalhos) para
 **192.168.0.168**, em várias conexões TCP de uma mesma porta de origem (comunicação ROS
-entre computadores). O limite do artigo, posto na raiz da interface, prende esse tráfego
+entre computadores). O 192.168.0.168 é o **`anymal-d021-lpc`, o computador de locomoção
+do próprio robô**: é tráfego interno, entre os computadores de bordo, que só passa pela
+`enp0s31f6` porque eles estão ligados pelo mesmo switch. O limite do artigo, posto na raiz
+da interface, prende esse tráfego
 na mesma fila do relatório. Como a fila do netem conta **pacotes** (limite 140), esses
 pacotes pequenos a mantêm cheia (138/140 no fim da medição; 17.117 descartes em 15 s), e os
 pacotes do relatório são recusados **ainda dentro do robô**. O TCP trata isso como
@@ -388,8 +391,8 @@ picos em 20 s), o que dá os ~0,06–0,08 Mbit/s medidos no artigo. Os 31,5% de 
 ping do artigo vêm da mesma fila cheia.
 
 **Consequência.** Nos experimentos do artigo, o link emulado não oferecia 3 Mbit/s ao
-relatório: ele disputava a fila com o tráfego interno do robô, que na planta não passa
-pelo link LTE se o 192.168.0.168 for um computador de bordo (confirmar). Para emular o
+relatório: ele disputava a fila com o tráfego entre o computador de navegação e o de
+locomoção, que na planta não passa pelo link LTE. Para emular o
 link da planta, use `rede/limitar.sh destino <IP_DO_PC>`, com fila de 140 pacotes como no
 artigo (com 1000 a vazão chega a 2,74 Mbit/s, mas a fila funda leva o RTT a segundos).
 
