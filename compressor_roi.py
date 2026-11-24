@@ -54,7 +54,7 @@ EXTENSOES_IMAGEM = (".png", ".jpg", ".jpeg")
 PADRAO = {
     "lado": 1600,          # lado máximo da foto entregue (resolução da ROI)
     "qualidade": 80,       # qualidade JPEG da foto entregue
-    "lado_fundo": 400,     # resolução "efetiva" do fundo (menor = mais borrado e menor)
+    "lado_fundo": 800,     # resolução "efetiva" do fundo (menor = mais borrado e menor)
     "qualidade_fundo": 30, # pré-quantização do fundo (0 = desligada); ver compor_roi()
     "modo": "auto",        # "auto": círculo nas peças compactas, contorno nas alongadas;
                            # "circulo" ou "poligono" forçam um dos dois
@@ -62,7 +62,15 @@ PADRAO = {
     "margem_min": 0.012,   # ... e pelo menos 1,2% do lado menor da foto
     "transicao": 0.02,     # largura da borda suave (fração do lado menor)
     "alongamento": 2.5,    # modo auto: se o círculo tem > 2,5× a área da peça, usa o contorno
+    # ANEL (ROI em degraus): faixa em volta da peça com qualidade intermediária, para o
+    # inspetor ver o entorno. Largura proporcional à peça (o mesmo "tamanho real" em fotos
+    # tiradas de perto ou de longe) + um mínimo; 0 desliga.
+    "anel": 0.0,           # largura extra, em frações do raio da peça (1.0 = mais um raio)
+    "anel_min": 0.04,      # ... e pelo menos 4% do lado menor da foto
+    "qualidade_anel": 50,  # resolução cheia, pré-quantizada nesta qualidade JPEG
 }
+ANEL_PADRAO = 1.0          # largura usada quando a condição pede '+anel'
+
 
 # Regiões aplicadas a TODA foto de um tamanho, mesmo sem marcação (inclusive em
 # missões novas). As térmicas (1158×768) têm a escala de temperatura sempre na
@@ -429,8 +437,17 @@ def comprimir_uniforme(img: Image.Image, lado: int, qualidade: int) -> bytes:
 def compor_roi(img: Image.Image, regioes: List[dict], lado: int = PADRAO["lado"],
                lado_fundo: int = PADRAO["lado_fundo"],
                qualidade_fundo: int = PADRAO["qualidade_fundo"],
+               anel: float = PADRAO["anel"], anel_min: float = PADRAO["anel_min"],
+               qualidade_anel: int = PADRAO["qualidade_anel"],
                **geo) -> Tuple[Image.Image, Image.Image]:
-    """Devolve (imagem composta, máscara) na resolução de saída, antes do JPEG."""
+    """
+    Devolve (imagem composta, máscara da peça) na resolução de saída, antes do JPEG.
+
+    Camadas, de dentro para fora:
+      peça  -> resolução e qualidade da condição (nítida)
+      anel  -> (se anel > 0) resolução cheia, pré-quantizada em `qualidade_anel`
+      fundo -> reduzido a `lado_fundo` e pré-quantizado em `qualidade_fundo`
+    """
     nitida = reduzir(img, lado)
     w, h = nitida.size
 
@@ -448,6 +465,13 @@ def compor_roi(img: Image.Image, regioes: List[dict], lado: int = PADRAO["lado"]
         fundo = Image.open(io.BytesIO(codificar_jpeg(fundo, qualidade_fundo))).convert("RGB")
 
     mascara = mascara_roi(regioes, w, h, **geo)
+    if anel and anel > 0:
+        g = dict(geo)
+        g["margem"] = g.get("margem", PADRAO["margem"]) + anel
+        g["margem_min"] = g.get("margem_min", PADRAO["margem_min"]) + anel_min
+        mascara_anel = mascara_roi(regioes, w, h, **g)
+        meio = Image.open(io.BytesIO(codificar_jpeg(nitida, qualidade_anel))).convert("RGB")
+        fundo = Image.composite(meio, fundo, mascara_anel)
     return Image.composite(nitida, fundo, mascara), mascara
 
 
@@ -455,6 +479,7 @@ def comprimir_roi(img: Image.Image, regioes: List[dict], lado: int = PADRAO["lad
                   qualidade: int = PADRAO["qualidade"], lado_fundo: int = PADRAO["lado_fundo"],
                   qualidade_fundo: int = PADRAO["qualidade_fundo"],
                   progressivo: bool = False, **geo) -> Tuple[bytes, dict]:
+    # geo também aceita anel, anel_min e qualidade_anel (ver compor_roi)
     """Comprime protegendo as regiões. Retorna (bytes JPEG, informações)."""
     composta, mascara = compor_roi(img, regioes, lado, lado_fundo, qualidade_fundo, **geo)
     dados = codificar_jpeg(composta, qualidade, progressivo)
@@ -480,7 +505,8 @@ class CompressorROI:
                  lado_fundo=PADRAO["lado_fundo"], qualidade_fundo=PADRAO["qualidade_fundo"],
                  lado_sem_roi=800, qualidade_sem_roi=45,
                  modo=PADRAO["modo"], margem=PADRAO["margem"], margem_min=PADRAO["margem_min"],
-                 transicao=PADRAO["transicao"], regioes_fixas=None):
+                 transicao=PADRAO["transicao"], regioes_fixas=None, anel=PADRAO["anel"],
+                 anel_min=PADRAO["anel_min"], qualidade_anel=PADRAO["qualidade_anel"]):
         if anotacoes is None or isinstance(anotacoes, AnotacoesROI):
             self.anotacoes = anotacoes
         else:
@@ -490,7 +516,8 @@ class CompressorROI:
         self.qualidade_fundo = int(qualidade_fundo or 0)
         self.lado_sem_roi, self.qualidade_sem_roi = int(lado_sem_roi), int(qualidade_sem_roi)
         self.geo = {"modo": modo, "margem": float(margem), "margem_min": float(margem_min),
-                    "transicao": float(transicao)}
+                    "transicao": float(transicao), "anel": float(anel or 0),
+                    "anel_min": float(anel_min), "qualidade_anel": int(qualidade_anel)}
         self.contagem = {"roi": 0, "fixa": 0, "uniforme": 0}
 
     def regioes_para(self, caminho: str) -> Tuple[Optional[List[dict]], str]:

@@ -52,14 +52,15 @@ PASTA_SCRIPT = os.path.dirname(os.path.abspath(__file__))
 #   RELATORIO_ROI=0                          desliga (volta ao comportamento do artigo)
 #   RELATORIO_ROI_ANOTACOES=/caminho/export  .json COCO ou pasta exportada do Roboflow
 #   RELATORIO_ROI_LADO=1600 RELATORIO_ROI_QUALIDADE=80
-#   RELATORIO_ROI_FUNDO=400 RELATORIO_ROI_QUALIDADE_FUNDO=30
+#   RELATORIO_ROI_FUNDO=800 RELATORIO_ROI_QUALIDADE_FUNDO=30 RELATORIO_ROI_ANEL=1.0 (0 = sem anel)
 #   RELATORIO_ROI_MODO=auto|circulo|poligono RELATORIO_ROI_MARGEM=0.15
 #   RELATORIO_ROI_TERMICA=0    desliga a região fixa da escala nas térmicas (1158×768)
 ROI_LIGADA = os.environ.get("RELATORIO_ROI", "1") == "1"
 ROI_ANOTACOES = os.environ.get("RELATORIO_ROI_ANOTACOES", os.path.join(PASTA_SCRIPT, "anotacoes_roi"))
 ROI_LADO = int(os.environ.get("RELATORIO_ROI_LADO", "1600"))
 ROI_QUALIDADE = int(os.environ.get("RELATORIO_ROI_QUALIDADE", "80"))
-ROI_FUNDO = int(os.environ.get("RELATORIO_ROI_FUNDO", "400"))
+ROI_FUNDO = int(os.environ.get("RELATORIO_ROI_FUNDO", "800"))
+ROI_ANEL = float(os.environ.get("RELATORIO_ROI_ANEL", "1.0"))
 ROI_QUALIDADE_FUNDO = int(os.environ.get("RELATORIO_ROI_QUALIDADE_FUNDO", "30"))
 ROI_MODO = os.environ.get("RELATORIO_ROI_MODO", "auto")
 ROI_TERMICA = os.environ.get("RELATORIO_ROI_TERMICA", "1") == "1"
@@ -85,7 +86,7 @@ if os.environ.get("RELATORIO_CONDICAO"):
 elif ROI_ATIVA:
     CONFIG_PADRAO = {"modo": "roi", "lado": LADO_MAX, "qualidade": QUALIDADE_JPEG,
                      "roi_lado": ROI_LADO, "roi_qualidade": ROI_QUALIDADE, "roi_fundo": ROI_FUNDO,
-                     "roi_qualidade_fundo": ROI_QUALIDADE_FUNDO, "roi_modo": ROI_MODO}
+                     "roi_qualidade_fundo": ROI_QUALIDADE_FUNDO, "roi_modo": ROI_MODO, "roi_anel": ROI_ANEL}
     CONFIG_PADRAO["condicao"] = configuracoes.nome_curto(CONFIG_PADRAO)
 else:
     CONFIG_PADRAO = configuracoes.ler_condicao(f"{LADO_MAX}/{QUALIDADE_JPEG}")
@@ -280,7 +281,7 @@ def carregar_compressor_roi(cfg):
         lado=cfg["roi_lado"], qualidade=cfg["roi_qualidade"],
         lado_fundo=cfg["roi_fundo"], qualidade_fundo=cfg["roi_qualidade_fundo"],
         lado_sem_roi=cfg["lado"], qualidade_sem_roi=cfg["qualidade"],
-        modo=cfg.get("roi_modo", "auto"), margem=ROI_MARGEM,
+        modo=cfg.get("roi_modo", "auto"), margem=ROI_MARGEM, anel=cfg.get("roi_anel", 0.0),
         regioes_fixas=None if ROI_TERMICA else {})
 
 

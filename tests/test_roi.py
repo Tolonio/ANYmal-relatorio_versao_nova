@@ -238,7 +238,7 @@ def modulos(missao, tmp_path_factory):
 
 def test_processador_usa_roi_so_nas_fotos_anotadas(modulos, missao):
     pr, _ = modulos
-    assert pr.ROI_ATIVA and "_roi1600q80f400" in pr.CONFIG_NOME
+    assert pr.ROI_ATIVA and "_roi1600q80f800" in pr.CONFIG_NOME
     pacote = pr.gerar_relatorio_nativo(missao["pasta"])
     z = zipfile.ZipFile(pacote)
     nomes = z.namelist()
@@ -327,9 +327,14 @@ def test_condicoes():
     u = cf.ler_condicao("1200/70")
     assert (u["modo"], u["lado"], u["qualidade"], u["condicao"]) == ("uniforme", 1200, 70, "1200/70")
     r = cf.ler_condicao("ROI:1200/70")
-    assert (r["roi_lado"], r["roi_qualidade"], r["roi_fundo"], r["roi_qualidade_fundo"]) == (1200, 70, 300, 30)
+    assert (r["roi_lado"], r["roi_qualidade"], r["roi_fundo"], r["roi_qualidade_fundo"]) == (1200, 70, 600, 30)
+    assert r["roi_anel"] == 1.0
     assert (r["lado"], r["qualidade"]) == (1200, 70)        # sem marcação: igual à uniforme
-    assert r["condicao"] == "roi:1200/70" and cf.nome_arquivo(r) == "roi1200q70f300qf30"
+    assert r["condicao"] == "roi:1200/70" and cf.nome_arquivo(r) == "roi1200q70f600qf30"
+    v1 = cf.ler_condicao("roi:1200/70/300/30+semanel")      # a ROI da primeira versão
+    assert (v1["roi_fundo"], v1["roi_anel"], v1["condicao"]) == (300, 0.0, "roi:1200/70/300/30+semanel")
+    assert cf.rotulo_download(v1) == "1200x1200-ROI-f300-qf30-semanel"
+    assert cf.ler_condicao("roi:1200/70+pol+semanel")["roi_modo"] == "poligono"
     e = cf.ler_condicao("roi:1600/80/400/0+pol")
     assert e["condicao"] == "roi:1600/80/400/0+pol" and e["roi_modo"] == "poligono"
     for ruim in ("", "1200", "roi:", "abc", "1200/70/3", "5000000/70", "1200/0", "--x"):
@@ -526,3 +531,19 @@ def test_mapa_e_comparacao(modulos, missao, tmp_path):
     assert ci.condicao_do_nome("1600x1600-q80-ROI_x_20261124-100000.zip") == "roi:1600/80"
     assert ci.condicao_do_nome("Relatorio_PDF_a_PT_800x800_q45_roi1600q80f400qf30_20261124_090000_jabcdef01.zip") == "roi:1600/80"
     assert ci.condicao_do_nome("original_a_20261124-100000.zip") == "original"
+
+
+def test_anel_melhora_entorno_e_custa_pouco(missao):
+    """Com anel, o entorno da peça fica bem mais fiel; o arquivo cresce pouco."""
+    nome, _, _ = missao["regioes"][0]
+    caminho = os.path.join(missao["pasta"], "resources", nome)
+    regs = cr.AnotacoesROI(missao["anotacoes"]).regioes_para(caminho)
+    img = cr.abrir_imagem(caminho)
+    sem, _ = cr.comprimir_roi(img, regs, 1600, 80, 400, 30)
+    com, _ = cr.comprimir_roi(img, regs, 1600, 80, 400, 30, anel=1.0)
+    o = np.asarray(img.convert("L"), float)
+    peca = np.asarray(cr.mascara_roi(regs, W, H)) > 250
+    entorno = (np.asarray(cr.mascara_roi(regs, W, H, margem=1.15, margem_min=0.052)) > 250) & ~peca
+    err = lambda b: ((np.asarray(Image.open(io.BytesIO(b)).convert("L"), float) - o) ** 2)[entorno].mean()
+    assert err(com) < 0.6 * err(sem)
+    assert len(com) < 1.4 * len(sem)

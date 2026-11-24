@@ -10,9 +10,10 @@ planta. Projeto do Instituto Tecnológico Vale (ITV) com a Vale.
 
 **O que há de novo**
 
-* **Compressão por ROI**: a peça marcada no Roboflow fica nítida e o resto da foto é
-  borrado, o que deixa o pacote bem menor. Nas térmicas, a escala de temperatura fica
-  sempre nítida, mesmo sem marcação.
+* **Compressão por ROI em degraus**: a peça marcada no Roboflow fica nítida, uma faixa
+  em volta dela também (o entorno), e o resto da foto vai em qualidade mais leve. O pacote
+  fica bem menor. Nas térmicas, a escala de temperatura fica sempre nítida, mesmo sem
+  marcação.
 * **Experimento**: gera vários relatórios da mesma inspeção com compressões diferentes,
   para comparar.
 * **Coletor CSV**: grava CPU, memória, rede e perdas a cada segundo durante cada relatório.
@@ -200,8 +201,10 @@ Uma **condição** diz como as fotos são comprimidas. Ela é escrita como texto
 |---|---|
 | `original` | fotos sem recompressão (o maior pacote) |
 | `1200/70` | **uniforme**: toda foto reduzida para caber em 1200×1200 px e salva em JPEG qualidade 70 |
-| `roi:1200/70` | **ROI**: a peça marcada fica em 1200/70 e o resto da foto é borrado; nas térmicas, a escala fica nítida; fotos sem marcação saem iguais à `1200/70` |
-| `roi:1600/80/400/30` | ROI com todos os parâmetros: lado / qualidade / resolução do fundo / qualidade do fundo |
+| `roi:1200/70` | **ROI em degraus**: peça em 1200/70, anel em volta nítido, resto em qualidade mais leve; nas térmicas, a escala fica nítida; fotos sem marcação saem iguais à `1200/70` |
+| `roi:1200/70+semanel` | ROI sem o anel (peça nítida direto no fundo) |
+| `roi:1600/80/800/30` | ROI com todos os parâmetros: lado / qualidade / resolução do fundo / qualidade do fundo |
+| `roi:1200/70/300/30+semanel` | a ROI da primeira versão (fundo em 1/4 da resolução, sem anel), que deixava o fundo borrado demais |
 | `roi:1200/70+pol` | força a proteção pelo contorno da peça |
 | `roi:1200/70+circ` | força a proteção por círculo |
 
@@ -212,18 +215,28 @@ As quatro do artigo são 600/35, 800/45, 1200/70 e 1600/85.
 Comparar `1200/70` com `roi:1200/70` isola o efeito da ROI: a peça e as fotos sem marcação
 saem idênticas, e só o fundo das fotos marcadas muda.
 
-### 4.2 Como a ROI funciona
+### 4.2 Como a ROI funciona (em degraus)
 
-1. A foto é reduzida para o lado `L`; essa é a resolução da peça.
-2. Em volta de cada marcação vai uma **área protegida**, que fica 100% nítida:
-   * peças compactas (parafusos, visor, sílica): o **menor círculo** que contém a peça,
-     com 15% de folga;
-   * peças alongadas (como a escala térmica, quando o círculo teria mais de 2,5× a área
-     da peça): o **próprio contorno**, com uma pequena margem.
-3. O resto da foto vira **fundo**: é reduzido para `L/4` e ampliado de volta (fica
-   borrado), depois passa por um JPEG de qualidade 30 alinhado aos blocos do JPEG final.
-   Assim o fundo quase não ocupa bytes.
-4. Uma borda suave liga a peça ao fundo, e sai **um JPEG comum**: o PDF não muda nada.
+Cada foto marcada é montada em **três camadas**, de dentro para fora:
+
+| Camada | Onde | Como fica |
+|---|---|---|
+| **peça** | a marcação do Roboflow, com folga | resolução e qualidade da condição (ex.: 1200/70), nítida |
+| **anel** | uma faixa em volta da peça, da largura de mais um raio dela (no mínimo 4% do lado menor da foto) | resolução cheia, JPEG qualidade 50: o entorno continua nítido |
+| **fundo** | o resto da foto | metade da resolução (600 px no nível 1200), JPEG qualidade 30 |
+
+* A largura do anel acompanha o **tamanho da peça**, e não um número fixo de pixels: a
+  distância da câmera muda de foto para foto, então um anel proporcional cobre um entorno
+  parecido no mundo real (numa foto de bojões a 1200 px, um parafuso de ~3 cm tem ~25 px).
+* Forma da área protegida: peças compactas (parafusos, visor, sílica) ganham o **menor
+  círculo** que as contém; peças alongadas (como a escala térmica, quando o círculo teria
+  mais de 2,5× a área da peça) usam o **próprio contorno**, com margem.
+* As camadas de baixa qualidade passam antes por um JPEG alinhado aos blocos do JPEG final:
+  assim quase não ocupam bytes no arquivo final. Bordas suaves ligam as camadas, e sai
+  **um JPEG comum** (o PDF não muda nada).
+* A primeira versão não tinha anel e reduzia o fundo para 1/4 da resolução: o arquivo era
+  ~15% menor, mas o fundo ficava borrado demais. Ela continua disponível como
+  `roi:1200/70/300/30+semanel`, para comparação.
 
 ### 4.3 Térmicas
 Toda foto **1158×768** (câmera térmica) tem a **escala de temperatura** (min/max/spot e
@@ -254,35 +267,38 @@ com a marcação (amarelo), a área protegida (ciano) e o resto escurecido.
 
 ## 5. Resultados preliminares
 
-Métricas contra as cópias do Roboflow (~470 KB por foto), **não** contra as originais de
-2,6 MB. Para o artigo, refaça com `avaliar_roi.py` sobre as originais (seção 6.5).
+ROI em degraus (peça + anel + fundo em meia resolução). Métricas contra as cópias do
+Roboflow (~470 KB por foto), **não** contra as originais de 2,6 MB. Para o artigo, refaça
+com `avaliar_roi.py` sobre as originais (seção 6.5).
 
-**Fotos RGB (95 fotos, métricas dentro da peça):**
+**Fotos RGB (95 fotos, SSIM dentro da peça):**
 
-| Nível | Uniforme (KB/foto) | ROI (KB/foto) | Economia | SSIM na peça |
-|---|---|---|---|---|
-| 600/35 | 12,5 | 8,1 | −35% | 0,661 |
-| 800/45 | 23,3 | 14,2 | −39% | 0,713 |
-| 1200/70 | 69,7 | 31,4 | −55% | 0,842 |
-| 1600/85 | 173,8 | 61,7 | −64% | 0,931 |
+| Nível | Uniforme (KB/foto) | ROI (KB/foto) | Economia | SSIM na peça | SSIM no resto (uniforme → ROI) |
+|---|---|---|---|---|---|
+| 600/35 | 12,5 | 10,0 | −20% | 0,661 | 0,86 → 0,86 |
+| 800/45 | 23,3 | 17,5 | −25% | 0,713 | 0,88 → 0,87 |
+| 1200/70 | 69,7 | 38,4 | −45% | 0,842 | 0,93 → 0,89 |
+| 1600/85 | 173,8 | 74,6 | −57% | 0,931 | 0,97 → 0,91 |
 
 **Térmicas (25 fotos, métricas dentro da faixa da escala):**
 
 | Nível | Uniforme (KB/foto) | ROI (KB/foto) | PSNR na escala |
 |---|---|---|---|
-| 600/35 | 14,3 | 12,3 | 17,7 dB |
-| 800/45 | 24,8 | 21,1 | 19,2 dB |
-| 1200/70 | 62,2 | 45,4 | 36,9 dB |
-| 1600/85 | 74,0 | 54,5 | 39,9 dB |
+| 600/35 | 14,3 | 13,0 | 17,7 dB |
+| 800/45 | 24,8 | 22,3 | 19,2 dB |
+| 1200/70 | 62,2 | 47,6 | 36,9 dB |
+| 1600/85 | 74,0 | 56,7 | 39,9 dB |
 
-* A peça fica **idêntica** à da uniforme do mesmo nível; só o fundo muda.
-* A ROI rende mais nos níveis altos: `roi:1600/85` fica **menor que a uniforme 1200/70**,
-  com a peça no nível da 1600/85.
-* Em 600/35 e 800/45 a peça já sai degradada (a inspetora deu 3,3 e 4,0), e a economia em
-  KB é pequena.
+* A peça fica **idêntica** à da uniforme do mesmo nível; só o entorno e o fundo mudam.
+* A ROI rende mais nos níveis altos: `roi:1600/85` fica quase do tamanho da uniforme
+  1200/70, com a peça no nível da 1600/85.
+* Em 600/35 e 800/45 a peça já sai degradada (a inspetora deu 3,3 e 4,0), e a economia é
+  pequena: a ROI não compensa nesses níveis.
 * Nas térmicas, em 600/35 e 800/45 os números ficam serrilhados por causa da **redução**
   (1158 → 600 px), não da compressão. A partir de 1200 a térmica não é reduzida e a escala
   fica igual à original.
+* A primeira versão (`+semanel`, fundo em 1/4) chegava a −55% em 1200/70, mas deixava o
+  fundo borrado demais (SSIM no resto ~0,85).
 
 **Matriz sugerida para o artigo** (×3 repetições): `original 600/35 1200/70 roi:1200/70 roi:1600/85`.
 
@@ -480,6 +496,7 @@ Variáveis de ambiente, usadas na frente do comando (ex.: `SERVIDOR_PORTA=8085 b
 | `RELATORIO_ROI_ANOTACOES` | `anotacoes_roi/` | outro arquivo/pasta de marcações |
 | `RELATORIO_ROI_TERMICA` | `1` | `0` desliga a escala protegida nas térmicas |
 | `RELATORIO_ROI_MODO` | `auto` | `circulo` ou `poligono` forçam a forma |
+| `RELATORIO_ROI_ANEL` | `1.0` | largura do anel em raios da peça na condição padrão; `0` tira o anel |
 | `RELATORIO_IMAGENS_SEPARADAS` | `1` | `0`: o ZIP leva só o PDF |
 | `RELATORIO_TRADUCAO_ONLINE` | `0` | `1` consulta o Google Tradutor |
 | `COLETOR_INTERFACE` | rota padrão | interface medida pelo coletor (ex.: `enp0s31f6`) |

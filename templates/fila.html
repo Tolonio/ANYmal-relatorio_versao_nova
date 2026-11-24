@@ -45,7 +45,7 @@
   <div class="legenda">
     <div><b>original</b><span>fotos sem recompressão (o maior pacote)</span></div>
     <div><b>1200/70</b><span>uniforme: toda foto reduzida para caber em 1200×1200 px e salva em JPEG qualidade 70</span></div>
-    <div><b>roi:1200/70</b><span>a peça marcada no Roboflow fica em 1200/70 e o resto da foto é borrado (bem menor); nas térmicas a escala de temperatura fica nítida; fotos sem marcação saem iguais à 1200/70</span></div>
+    <div><b>roi:1200/70</b><span>ROI em degraus: a peça marcada no Roboflow fica em 1200/70, uma faixa em volta dela também fica nítida (o entorno) e o resto da foto vai em qualidade mais leve. O arquivo sai ~45% menor. Nas térmicas a escala de temperatura fica nítida; fotos sem marcação saem iguais à 1200/70.</span></div>
   </div>
   <p class="muted" style="margin:10px 0 0">Só quer o relatório com ROI? Marque <b>uma</b> condição roi e deixe 1 repetição.
     Quanto maior o número (600 → 1600 e 35 → 85), melhor a foto e maior o arquivo.</p>
@@ -60,7 +60,7 @@
     <label class="cond"><input type="checkbox" name="condicao" value="{{ c }}"> {{ c }}</label>
     {% endfor %}
   </div>
-  <div class="grupo">Com ROI (peça nítida, resto borrado)</div>
+  <div class="grupo">Com ROI (peça e entorno nítidos, resto mais leve)</div>
   <div class="grade-cond">
     {% for c in condicoes if c.startswith('roi:') %}
     <label class="cond"><input type="checkbox" name="condicao" value="{{ c }}" {% if not roi.ativa %}disabled{% elif c == 'roi:1200/70' %}checked{% endif %}> {{ c }}</label>

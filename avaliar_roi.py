@@ -67,7 +67,7 @@ def ler_configs(uniformes: str, rois: str, modo: str, margem: float):
         c = configuracoes.ler_condicao("roi:" + item)
         configs.append({"nome": c["condicao"], "tipo": "roi", "lado": c["roi_lado"], "qualidade": c["roi_qualidade"],
                         "fundo": c["roi_fundo"], "qualidade_fundo": c["roi_qualidade_fundo"],
-                        "modo": c["roi_modo"], "margem": margem})
+                        "modo": c["roi_modo"], "margem": margem, "anel": c.get("roi_anel", 0.0)})
     return configs
 
 
@@ -79,7 +79,8 @@ def comprimir(caminho, regioes, cfg):
         dados = cr.comprimir_uniforme(img, cfg["lado"], cfg["qualidade"])
     else:
         dados, _ = cr.comprimir_roi(img, regioes, cfg["lado"], cfg["qualidade"], cfg["fundo"],
-                                    cfg["qualidade_fundo"], modo=cfg["modo"], margem=cfg["margem"])
+                                    cfg["qualidade_fundo"], modo=cfg["modo"], margem=cfg["margem"],
+                                    anel=cfg.get("anel", 0.0))
     return dados, time.perf_counter() - t0
 
 
