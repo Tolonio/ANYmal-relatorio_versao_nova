@@ -242,9 +242,9 @@ def test_processador_usa_roi_so_nas_fotos_anotadas(modulos, missao):
     pacote = pr.gerar_relatorio_nativo(missao["pasta"])
     z = zipfile.ZipFile(pacote)
     nomes = z.namelist()
-    assert "Relatorio_Traduzido_PT.pdf" in nomes
+    assert any(n.endswith(".pdf") and n.startswith("1600x1600-q80-ROI_missao_teste/") for n in nomes)
     fotos = [n for n in nomes if n.endswith(".jpg")]
-    assert len(fotos) == 4 and any(n.startswith("imagens/Visor_0_") for n in fotos)
+    assert len(fotos) == 4 and any("/imagens/Visor_0_" in n for n in fotos)
     tamanhos = {n: Image.open(io.BytesIO(z.read(n))).size for n in fotos}
     assert sorted(tamanhos.values())[-1] == (1600, 900)      # ROI: 1600 de lado
     assert any(max(s) <= 800 for s in tamanhos.values())     # térmica: config uniforme
@@ -355,7 +355,7 @@ def test_roi_e_uniforme_no_mesmo_nivel(modulos, missao):
     tam = {}
     for c in ("800/45", "roi:800/45"):
         z = zipfile.ZipFile(pr.gerar_relatorio_nativo(missao["pasta"], c))
-        tam[c] = {n: len(z.read(n)) for n in z.namelist() if n.endswith(".jpg")}
+        tam[c] = {n.split("/", 1)[1]: len(z.read(n)) for n in z.namelist() if n.endswith(".jpg")}
     termicas = [n for n in tam["800/45"] if "Termica" in n]
     assert termicas and all(tam["800/45"][n] == tam["roi:800/45"][n] for n in termicas)
     assert sum(tam["roi:800/45"].values()) < sum(tam["800/45"].values())
@@ -478,3 +478,51 @@ def test_condicao_forma():
     c = cf.ler_condicao("roi:1200/70+circ")
     assert c["roi_modo"] == "circulo" and c["condicao"] == "roi:1200/70+circ"
     assert cf.nome_arquivo(c).endswith("circ")
+
+
+# ------------------------------------------------------------
+# mapa_imagens.csv e comparar_imagens.py
+# ------------------------------------------------------------
+
+def test_mapa_e_comparacao(modulos, missao, tmp_path):
+    import comparar_imagens as ci
+    pr, _ = modulos
+    zips = tmp_path / "zips"
+    zips.mkdir()
+    for c, nome in (("600/35", "600x600_missao_teste_20261124-100000.zip"),
+                    ("roi:600/35", "600x600-ROI_missao_teste_20261124-100001.zip")):
+        (zips / nome).write_bytes(pr.gerar_relatorio_nativo(missao["pasta"], c).getvalue())
+    z = zipfile.ZipFile(zips / "600x600-ROI_missao_teste_20261124-100001.zip")
+    assert all(n.startswith("600x600-ROI_missao_teste/") for n in z.namelist())   # pasta própria
+    mapa = list(csv.DictReader(io.StringIO(z.read("600x600-ROI_missao_teste/mapa_imagens.csv").decode("utf-8-sig"))))
+    assert len(mapa) == 4 and {m["roi"] for m in mapa} == {"peca", "nao"}
+    assert all(int(m["bytes_comprimido"]) < int(m["bytes_original"]) for m in mapa)
+
+    # ZIP antigo: sem mapa e com o nome antigo -> casa pela imagem
+    velho = zipfile.ZipFile(zips / "Relatorio_PDF_missao_teste_PT_800x800_q45_20261124_090000_jabcdef01.zip", "w")
+    with zipfile.ZipFile(io.BytesIO(pr.gerar_relatorio_nativo(missao["pasta"], "800/45").getvalue())) as novo:
+        for n in novo.namelist():
+            if not n.endswith("mapa_imagens.csv"):      # formato antigo: sem pasta e sem mapa
+                velho.writestr(n.split("/", 1)[1], novo.read(n))
+    velho.close()
+
+    saida = tmp_path / "cmp"
+    assert ci.main(["--originais", missao["pasta"], "--zips", str(zips), "--saida", str(saida),
+                    "--anotacoes", missao["anotacoes"], "--workers", "1", "--exemplos", "2"]) == 0
+    linhas = list(csv.DictReader(open(saida / "imagens.csv", encoding="utf-8-sig"), delimiter=";"))
+    assert {l["condicao"] for l in linhas} == {"600/35", "roi:600/35", "800/45"}
+    assert len(linhas) == 12                                   # 4 fotos x 3 condições
+    velhas = [l for l in linhas if l["condicao"] == "800/45"]
+    # casou cada foto com a original certa (o nome no ZIP contém o nome da peça)
+    pares = {l["arquivo_no_zip"]: l["arquivo_original"] for l in velhas}
+    assert len(set(pares.values())) == 4
+    for zipnome, orig in pares.items():
+        if "Visor_" in zipnome:
+            assert orig.endswith(f"000{zipnome.split('Visor_')[1][0]}.jpg")
+    resumo = list(csv.DictReader(open(saida / "resumo.csv", encoding="utf-8-sig"), delimiter=";"))
+    assert [r["condicao"] for r in resumo] == ["600/35", "roi:600/35", "800/45"]
+    assert "ssim_peca_medio" in resumo[0]
+    assert len(list((saida / "comparacoes").glob("*.jpg"))) >= 2
+    assert ci.condicao_do_nome("1600x1600-q80-ROI_x_20261124-100000.zip") == "roi:1600/80"
+    assert ci.condicao_do_nome("Relatorio_PDF_a_PT_800x800_q45_roi1600q80f400qf30_20261124_090000_jabcdef01.zip") == "roi:1600/80"
+    assert ci.condicao_do_nome("original_a_20261124-100000.zip") == "original"

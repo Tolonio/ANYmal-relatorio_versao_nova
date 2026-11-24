@@ -1,3 +1,4 @@
+import csv                     # mapa_imagens.csv dentro do ZIP
 import io                      # PDF, ZIP e imagens gerados na memória RAM
 import json                    # cache das traduções
 import os                      # navegação nas pastas do SSD do ANYmal
@@ -550,21 +551,54 @@ def gerar_relatorio_nativo(caminho_missao, condicao=None):
     zip_memoria = io.BytesIO()
     # ZIP_STORED: JPEG e PDF já são comprimidos; recomprimir só gasta CPU
     with zipfile.ZipFile(zip_memoria, "w", zipfile.ZIP_STORED) as zipf:
-        zipf.writestr("Relatorio_Traduzido_PT.pdf", pdf_memoria.getvalue())
+        # tudo dentro de uma pasta com a condição: extrair vários ZIPs no mesmo lugar
+        # não mistura nem sobrescreve nada (600x600-ROI_2026-05-20/imagens/...)
+        rotulo = configuracoes.rotulo_download(_cfg)
+        inspecao = re.sub(r"[^A-Za-z0-9._-]+", "_", os.path.basename(caminho_missao.rstrip("/\\"))).strip("_")
+        pasta_zip = f"{rotulo}_{inspecao}/"
+        zipf.writestr(f"{pasta_zip}Relatorio_{rotulo}_{inspecao}.pdf", pdf_memoria.getvalue())
 
-        if INCLUIR_IMAGENS_SEPARADAS:
-            usados = {"relatorio_traduzido_pt.pdf"}
-            for caminho in imagens:
-                relativo = normalizar_caminho(os.path.relpath(caminho, caminho_missao))
-                novo_nome = mapa_renomeio.get(relativo, relativo)
-                if novo_nome.startswith("resources/"):
-                    novo_nome = novo_nome.replace("resources/", "imagens/", 1)
+        # mapa_imagens.csv: liga cada foto do ZIP à original, com tamanhos e resoluções
+        # (é o que o comparar_imagens.py usa; também abre direto no Excel)
+        mapa = io.StringIO()
+        mapa_csv = csv.writer(mapa)
+        mapa_csv.writerow(["arquivo_no_zip", "arquivo_original", "condicao", "roi",
+                           "bytes_original", "bytes_comprimido", "reducao_percent",
+                           "largura_original", "altura_original", "largura", "altura"])
+        usados = {"relatorio_traduzido_pt.pdf", "mapa_imagens.csv"}
+        for caminho in imagens:
+            relativo = normalizar_caminho(os.path.relpath(caminho, caminho_missao))
+            novo_nome = mapa_renomeio.get(relativo, relativo)
+            if novo_nome.startswith("resources/"):
+                novo_nome = novo_nome.replace("resources/", "imagens/", 1)
 
-                dados = imagens_comprimidas.get(os.path.realpath(caminho))
-                if dados is not None:
-                    zipf.writestr(nome_unico(os.path.splitext(novo_nome)[0] + ".jpg", usados), dados)
-                else:
-                    zipf.write(caminho, nome_unico(novo_nome, usados))
+            dados = imagens_comprimidas.get(os.path.realpath(caminho))
+            if dados is not None:
+                nome_zip = pasta_zip + nome_unico(os.path.splitext(novo_nome)[0] + ".jpg", usados)
+                if INCLUIR_IMAGENS_SEPARADAS:
+                    zipf.writestr(nome_zip, dados)
+            else:
+                nome_zip = pasta_zip + nome_unico(novo_nome, usados)
+                if INCLUIR_IMAGENS_SEPARADAS:
+                    zipf.write(caminho, nome_zip)
+
+            b_orig = os.path.getsize(caminho)
+            b_comp = len(dados) if dados is not None else b_orig
+            try:
+                with Image.open(caminho) as im_o:
+                    wo, ho = im_o.size
+                with Image.open(io.BytesIO(dados)) if dados is not None else Image.open(caminho) as im_c:
+                    wc, hc = im_c.size
+            except Exception:
+                wo = ho = wc = hc = ""
+            roi = ""
+            if _compressor is not None and dados is not None:
+                roi = {"marcacao": "peca", "fixa": "escala_termica"}.get(_compressor.regioes_para(caminho)[1], "nao")
+            mapa_csv.writerow([nome_zip if INCLUIR_IMAGENS_SEPARADAS else "(só no PDF)", relativo,
+                               _cfg["condicao"], roi, b_orig, b_comp,
+                               round(100 * (1 - b_comp / b_orig), 1) if b_orig else "",
+                               wo, ho, wc, hc])
+        zipf.writestr(f"{pasta_zip}mapa_imagens.csv", mapa.getvalue().encode("utf-8-sig"))
 
     tempos["t_zip_s"] = time.monotonic() - t_etapa
     ultima_execucao.update(tempos)

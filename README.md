@@ -164,9 +164,19 @@ A data e a hora são as do pedido. A qualidade só aparece quando foge do par do
 repetição, o nome termina em `_r1`, `_r2`…
 
 ### O que vem no ZIP
-* `Relatorio_Traduzido_PT.pdf`: o relatório traduzido, com as fotos comprimidas;
-* `imagens/`: as fotos separadas, renomeadas pelo equipamento e horário
-  (ex.: `Visor_de_oleo_15-10-07.jpg`, `Termica_Motor_15-20-30.jpg`).
+Tudo fica dentro de **uma pasta com o nome da condição**, então extrair vários ZIPs no
+mesmo lugar não mistura nem sobrescreve nada:
+
+```
+600x600-ROI_2026-05-20/
+├── Relatorio_600x600-ROI_2026-05-20.pdf   relatório traduzido, com as fotos comprimidas
+├── mapa_imagens.csv                        cada foto: nome original, tamanho antes/depois, resolução, ROI
+└── imagens/                                fotos separadas, renomeadas pelo equipamento e horário
+    ├── Visor_de_oleo_15-10-07.jpg
+    └── Termica_Motor_15-20-30.jpg
+```
+
+O `mapa_imagens.csv` abre no Excel e já responde "quanto cada foto tinha e quanto ficou".
 
 ### Tradução
 As mensagens do `report.xml` são traduzidas por um **dicionário embutido**
@@ -399,6 +409,34 @@ tamanho original por Lanczos, como no artigo), e o **ΔE00** (diferença de cor)
 Gera `resumo.md`/`resumo.csv`, `fig_compromisso.png` (tamanho × SSIM na peça), `recortes/`
 (a mesma peça em cada condição) e exemplos de foto inteira com ROI.
 
+### 6.6 Comparar os relatórios baixados com as originais
+
+Depois de baixar os ZIPs e copiar a inspeção original do robô, no PC:
+
+```bash
+# fotos originais da inspeção (uma vez)
+scp -r integration@anymal-d021-npc:/home/integration/.ros/reports/2026-05-20 ~/inspecoes_anymal/
+
+python -m pip install -r requirements-pc.txt
+python comparar_imagens.py --originais ~/inspecoes_anymal/2026-05-20 --zips ~/Downloads
+```
+
+Ele lê os ZIPs direto (não precisa extrair), separa os da mesma inspeção e, se a mesma
+condição foi baixada mais de uma vez, usa a mais recente (`--todos` mantém todas). Gera em
+`comparacao_<inspeção>/`:
+
+* `imagens.csv`: cada foto em cada condição: tamanho antes e depois, redução (%) e
+  "vezes menor", resolução antes e depois, PSNR e SSIM na foto inteira e na peça;
+* `resumo.csv` / `resumo.md`: por condição: total original e comprimido, redução, KB por
+  foto, tamanho do ZIP e do PDF, SSIM e PSNR médios;
+* `comparacoes/`: para 8 fotos (`--exemplos N`), a foto inteira em HD (original + cada
+  condição, com KB e SSIM na legenda) e um `_detalhe.jpg` com o zoom na peça.
+
+Os CSVs saem com `;` e vírgula decimal, para abrir direto no Excel em português. Nos ZIPs
+antigos, sem `mapa_imagens.csv`, o script reconhece cada foto pela imagem. As métricas
+levam alguns minutos para 169 fotos; `--rapido` calcula em meia resolução e
+`--sem-metricas` faz só os tamanhos, em segundos.
+
 ## 7. Arquivos do projeto
 
 | Arquivo | Onde roda | Para que serve |
@@ -413,7 +451,8 @@ Gera `resumo.md`/`resumo.csv`, `fig_compromisso.png` (tamanho × SSIM na peça),
 | `rede/diagnostico_rede.sh` | robô | diagnóstico da queda de vazão (seção 6.2) |
 | `rede/analisar_diagnostico.py` | robô ou PC | resume a pasta do diagnóstico |
 | `experimento_pc.py` | PC | matriz de experimentos e tempos de entrega |
-| `avaliar_roi.py` | PC | métricas de qualidade e figuras |
+| `avaliar_roi.py` | PC | métricas de qualidade de cada condição, recomprimindo as originais |
+| `comparar_imagens.py` | PC | compara os ZIPs baixados com as originais (tamanhos, métricas, figuras HD) |
 | `requirements.txt` | robô | bibliotecas do servidor |
 | `requirements-pc.txt` | PC | bibliotecas da avaliação e dos testes |
 
