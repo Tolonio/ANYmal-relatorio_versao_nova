@@ -64,10 +64,12 @@ ROI_MODO = os.environ.get("RELATORIO_ROI_MODO", "auto")
 ROI_TERMICA = os.environ.get("RELATORIO_ROI_TERMICA", "1") == "1"
 ROI_MARGEM = float(os.environ.get("RELATORIO_ROI_MARGEM", "0.15"))
 
+ROI_ERRO_IMPORT = ""
 try:
     import compressor_roi
-except ImportError:            # sem o módulo: funciona como antes
+except ImportError as _erro:   # ex.: falta numpy no ambiente: funciona como antes, sem ROI
     compressor_roi = None
+    ROI_ERRO_IMPORT = f"{_erro} (instale com: python3 -m pip install numpy pillow)"
 
 import configuracoes
 
@@ -284,7 +286,15 @@ def carregar_compressor_roi(cfg):
 def info_roi():
     """Resumo para a interface web."""
     info = {"ativa": ROI_ATIVA, "caminho": ROI_ANOTACOES, "imagens_anotadas": 0,
-            "config": CONFIG_PADRAO["condicao"], "termica": bool(ROI_TERMICA and compressor_roi)}
+            "config": CONFIG_PADRAO["condicao"], "termica": bool(ROI_TERMICA and compressor_roi),
+            "motivo": ""}
+    if not ROI_ATIVA:
+        if not ROI_LIGADA:
+            info["motivo"] = "desligada por RELATORIO_ROI=0"
+        elif compressor_roi is None:
+            info["motivo"] = "compressor_roi não carregou: " + ROI_ERRO_IMPORT
+        else:
+            info["motivo"] = f"arquivo de marcações não encontrado em {ROI_ANOTACOES}"
     if ROI_ATIVA:
         try:
             info["imagens_anotadas"] = len(compressor_roi.AnotacoesROI(ROI_ANOTACOES))

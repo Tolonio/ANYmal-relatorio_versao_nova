@@ -811,7 +811,8 @@ if __name__ == "__main__":
     print("==============================================")
     print("Condição padrão:", CONFIG_EXPERIMENTO)
     roi = info_roi()
-    print("Compressão por ROI:", f"disponível ({roi['imagens_anotadas']} fotos anotadas)" if roi["ativa"] else "sem anotações")
+    print("Compressão por ROI:", f"disponível ({roi['imagens_anotadas']} fotos anotadas)" if roi["ativa"]
+          else "DESLIGADA: " + roi["motivo"])
     print("Pasta das missões:", PASTA_REMOTA)
     print("Porta:", PORTA, f"(abra http://<ip-do-robo>:{PORTA})")
     print("Relatórios salvos em:", PASTA_RELATORIOS)

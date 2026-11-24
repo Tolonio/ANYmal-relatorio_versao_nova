@@ -30,8 +30,8 @@
     <span class="muted">{{ roi.imagens_anotadas }} fotos com peça demarcada{% if roi.termica %} · térmicas: escala de temperatura sempre nítida{% endif %}</span>
     <span class="muted">Botão “Gerar relatório”: <b>{{ roi.config }}</b> · outras condições em “Experimento”</span>
   {% else %}
-    <span class="selo neutro"><span class="ponto"></span>Compressão uniforme</span>
-    <span class="muted">Sem anotações de ROI. Coloque a exportação do Roboflow em <code>anotacoes_roi/</code> para ativar.</span>
+    <span class="selo alerta"><span class="ponto"></span>ROI desligada</span>
+    <span class="muted">Motivo: <b>{{ roi.motivo }}</b>. Até resolver, os relatórios usam compressão uniforme.</span>
   {% endif %}
 </div>
 

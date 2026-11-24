@@ -54,7 +54,7 @@
   </div>
   <button class="botao" type="submit">Enfileirar</button>
   <a class="botao sec" href="{{ url_for('pagina_fila') }}">Cancelar</a>
-  {% if not roi.ativa %}<p class="muted">Sem anotações de ROI no robô: as condições roi:… ficam desabilitadas.</p>{% endif %}
+  {% if not roi.ativa %}<p class="muted">ROI desligada ({{ roi.motivo }}): as condições roi:… ficam desabilitadas.</p>{% endif %}
 </form>
 {% else %}
 <div class="cartao muted">Para enfileirar várias condições, clique em <b>Experimento</b> ao lado de uma missão em
