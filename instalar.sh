@@ -24,7 +24,8 @@ fi
 
 passo "1/4 Pacotes do sistema (pede a senha do sudo)"
 PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
-sudo apt-get update -qq || vermelho "apt-get update falhou (sem internet?). Continuando."
+echo "(pode levar alguns minutos; se pedir senha, os caracteres não aparecem)"
+sudo apt-get update || vermelho "apt-get update falhou (sem internet?). Continuando."
 # bibliotecas do weasyprint (as mesmas do README antigo) + tc e ping para o coletor
 sudo apt-get install -y \
     python3-venv libcairo2 libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf-2.0-0 \
