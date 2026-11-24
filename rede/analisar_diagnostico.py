@@ -89,16 +89,17 @@ def ss_resumo(pasta, nome):
 
 
 def destinos(pasta, nome):
-    """Bytes por IP de destino no tcpdump do tráfego de fundo."""
+    """Bytes (carga útil) e pacotes por IP de destino no tcpdump do tráfego de fundo."""
     txt = ler(os.path.join(pasta, f"{nome}_fundo_tcpdump.txt"))
-    por = Counter()
+    por, pacotes = Counter(), Counter()
     for linha in txt.splitlines():
         m = re.search(r"IP6? (\S+?) > (\S+?):.*?(?:length |tcp |udp )(\d+)", linha)
         if not m:
             continue
         dst = m.group(2).rsplit(".", 1)[0] if m.group(2).count(".") == 4 else m.group(2)
         por[dst] += int(m.group(3))
-    return por
+        pacotes[dst] += 1
+    return por, pacotes
 
 
 def main(pasta):
@@ -114,21 +115,26 @@ def main(pasta):
     print()
 
     print("## Tráfego de fundo (15 s sem download)\n")
-    print("| Situação | Saindo da interface | Perda de ping | RTT médio | Descartes na fila |")
-    print("|---|---|---|---|---|")
+    print("| Situação | Saindo da interface | Pacotes/s | Perda de ping | RTT médio | Descartes na fila | Fila ocupada no fim |")
+    print("|---|---|---|---|---|---|---|")
     for nome, rot in (("A_sem_limite", "sem limite"), ("B_artigo", "limite do artigo")):
         tx = tx_mbps(pasta, f"{nome}_fundo_tx.txt")
         perda, rtt = ping(pasta, f"{nome}_fundo_ping.txt")
         drop, _ = descartes(pasta, f"{nome}_fundo_tc_antes.txt", f"{nome}_fundo_tc_depois.txt")
-        print(f"| {rot} | {fmt(tx, ' Mbit/s', 2)} | {fmt(perda, '%', 0)} | {fmt(rtt, ' ms', 0)} | {fmt(drop)} |")
-    por = destinos(pasta, "A_sem_limite")
-    total = sum(por.values())
-    if total:
-        print("\nPara onde vai o tráfego de fundo (sem limite):\n")
+        _, pk = destinos(pasta, nome)
+        fila = re.search(r"limit (\d+).*?\n.*?\n\s*backlog \S+ (\d+)p", ler(os.path.join(pasta, f"{nome}_fundo_tc_depois.txt")), re.S)
+        ocup = f"{fila.group(2)}/{fila.group(1)} pacotes" if fila else "—"
+        print(f"| {rot} | {fmt(tx, ' Mbit/s', 2)} | {sum(pk.values()) / 15:.0f} | {fmt(perda, '%', 0)} | {fmt(rtt, ' ms', 0)} "
+              f"| {fmt(drop)} | {ocup} |")
+    por, pk = destinos(pasta, "A_sem_limite")
+    total, total_pk = sum(por.values()), sum(pk.values())
+    if total_pk:
+        print("\nPara onde vai o tráfego de fundo (sem limite; Mbit/s só da carga útil, sem cabeçalhos):\n")
         pc = re.search(r"^pc: (.*)$", info, re.M)
-        for ip, b in por.most_common(6):
+        for ip, n in pk.most_common(6):
             marca = "  ← PC" if pc and ip == pc.group(1).strip() else ""
-            print(f"- {ip}: {b * 8 / 15 / 1e6:.2f} Mbit/s ({100 * b / total:.0f}%){marca}")
+            print(f"- {ip}: {n / 15:.0f} pacotes/s ({100 * n / total_pk:.0f}%), "
+                  f"{por[ip] * 8 / 15 / 1e6:.2f} Mbit/s, {por[ip] / max(n, 1):.0f} B por pacote{marca}")
     print()
 
     print("## Envio TCP robô → PC (iperf3)\n")

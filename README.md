@@ -319,7 +319,7 @@ sudo bash rede/limitar.sh desligar              # remove o limite
   latency 400ms` + `netem delay 167ms limit 140` na raiz da `enp0s31f6`.
 * `destino` aplica 3 Mbit/s + 167 ms **só ao tráfego para os IPs informados** (vírgula
   separa vários) e deixa o resto livre.
-* Variáveis: `IF=enp0s31f6 TAXA=3mbit ATRASO=167ms FILA=1000`.
+* Variáveis: `IF=enp0s31f6 TAXA=3mbit ATRASO=167ms FILA=140` (fila em pacotes, igual ao artigo).
 
 ### 6.2 Diagnóstico: por que a vazão cai para ~0,06 Mbit/s
 
@@ -363,6 +363,35 @@ sudo bash rede/diagnostico_rede.sh <IP_DO_PC>
   `sudo IF=<interface> bash rede/diagnostico_rede.sh <IP_DO_PC>`.
 * Gera `rede/diagnostico_<data>/` com os dados brutos e um **`resumo.md`** com as tabelas
   e uma leitura automática do que causou a queda.
+
+#### Resultado do diagnóstico de 24/11/2026 (robô `anymal-d021`, kernel 6.8, cubic)
+
+| Configuração | Vazão robô → PC | RTT (ping) |
+|---|---|---|
+| sem limite | 94,1 Mbit/s | 4 ms |
+| **artigo** (tbf + netem, fila de 140 pacotes) | **0,079 Mbit/s** | 167 ms, 5% de perda |
+| só tbf 3 Mbit/s | 0,98 Mbit/s | 277 ms |
+| só netem 167 ms | 22,2 Mbit/s | 168 ms |
+| artigo com fila de 1000 pacotes | 0,71 Mbit/s | 677 ms |
+| artigo sem TSO/GSO | 0,10 Mbit/s | 168 ms, 25% de perda |
+| **3 Mbit/s + 167 ms só para o PC** (fila de 1000) | **2,74 Mbit/s** | até 5 s (fila funda) |
+
+**Causa.** Sem nenhum download, o computador de navegação (192.168.0.169) envia pela
+`enp0s31f6` **~4.260 pacotes/s** de 41 B em média (3,8 Mbit/s com cabeçalhos) para
+**192.168.0.168**, em várias conexões TCP de uma mesma porta de origem (comunicação ROS
+entre computadores). O limite do artigo, posto na raiz da interface, prende esse tráfego
+na mesma fila do relatório. Como a fila do netem conta **pacotes** (limite 140), esses
+pacotes pequenos a mantêm cheia (138/140 no fim da medição; 17.117 descartes em 15 s), e os
+pacotes do relatório são recusados **ainda dentro do robô**. O TCP trata isso como
+congestionamento local: não aparecem retransmissões, mas ele quase não envia (dois
+picos em 20 s), o que dá os ~0,06–0,08 Mbit/s medidos no artigo. Os 31,5% de perda de
+ping do artigo vêm da mesma fila cheia.
+
+**Consequência.** Nos experimentos do artigo, o link emulado não oferecia 3 Mbit/s ao
+relatório: ele disputava a fila com o tráfego interno do robô, que na planta não passa
+pelo link LTE se o 192.168.0.168 for um computador de bordo (confirmar). Para emular o
+link da planta, use `rede/limitar.sh destino <IP_DO_PC>`, com fila de 140 pacotes como no
+artigo (com 1000 a vazão chega a 2,74 Mbit/s, mas a fila funda leva o RTT a segundos).
 
 ### 6.3 Medir tempos de entrega a partir do PC
 
