@@ -150,6 +150,19 @@ Todos os ZIPs já gerados (ficam em `~/relatorios_gerados` no robô), com data, 
 tamanho. Se um download cair, use "Retomar" no gerenciador de downloads do navegador: ele
 continua de onde parou.
 
+### Nome do ZIP
+Começa pela condição, para dar para identificar na lista de downloads do navegador:
+
+| Condição | Nome |
+|---|---|
+| `600/35` | `600x600_<inspeção>_<AAAAmmdd-HHMMSS>.zip` |
+| `roi:600/35` | `600x600-ROI_<inspeção>_<AAAAmmdd-HHMMSS>.zip` |
+| `original` | `original_<inspeção>_<AAAAmmdd-HHMMSS>.zip` |
+
+A data e a hora são as do pedido. A qualidade só aparece quando foge do par do artigo
+(600/35, 800/45, 1200/70, 1600/85), por exemplo `600x600-q50-ROI`. Com mais de uma
+repetição, o nome termina em `_r1`, `_r2`…
+
 ### O que vem no ZIP
 * `Relatorio_Traduzido_PT.pdf`: o relatório traduzido, com as fotos comprimidas;
 * `imagens/`: as fotos separadas, renomeadas pelo equipamento e horário

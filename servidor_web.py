@@ -224,9 +224,20 @@ def contar_fotos(pasta):
         return None
 
 
+_RE_NOME_NOVO = re.compile(r"^(?P<cond>[^_]+)_(?P<insp>.+)_(?P<data>\d{8}-\d{6})(?:_r\d+)?(?:_[0-9a-f]{8})?$")
+
+
 def ler_nome_relatorio(nome):
-    """Relatorio_PDF_<missao>_PT_<config>_<AAAAmmdd_HHMMSS>[_jobid].zip -> partes."""
+    """
+    Nome do ZIP -> (inspeção, condição, data).
+      novo:   600x600-ROI_<inspeção>_<AAAAmmdd-HHMMSS>[_r2][_jobid].zip
+      antigo: Relatorio_PDF_<inspeção>_PT_<config>_<AAAAmmdd_HHMMSS>[_jobid].zip
+    """
     base = nome[:-4]
+    m = _RE_NOME_NOVO.match(base)
+    if m and not base.startswith("Relatorio_PDF_"):
+        data = datetime.strptime(m.group("data"), "%Y%m%d-%H%M%S").strftime("%d/%m/%Y %H:%M")
+        return m.group("insp"), m.group("cond"), data
     missao, config, data = base, "", ""
     base = re.sub(r"_j[0-9a-f]{8}$", "", base)
     if base.startswith("Relatorio_PDF_") and "_PT_" in base:
@@ -270,17 +281,25 @@ def enfileirar(missao, condicoes, repeticoes=1, embaralhar=False, coletor=False,
 
     lote = uuid.uuid4().hex[:6]
     nome_pasta = nome_seguro(os.path.basename(missao.rstrip("/")))
+    usados = {j["arquivo"] for j in jobs.values()}
     ids = []
     with tem_trabalho:
         for rep, cfg in pedidos:
             job_id = uuid.uuid4().hex[:8]
-            carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
+            carimbo = datetime.now().strftime("%Y%m%d-%H%M%S")
+            # começa pela condição (600x600-ROI...) para dar para identificar no navegador
+            base = f"{configuracoes.rotulo_download(cfg)}_{nome_pasta}_{carimbo}"
+            if int(repeticoes) > 1:
+                base += f"_r{rep}"
+            arquivo = base + ".zip"
+            if arquivo in usados or os.path.exists(os.path.join(PASTA_RELATORIOS, arquivo)):
+                arquivo = f"{base}_{job_id}.zip"
+            usados.add(arquivo)
             jobs[job_id] = {
                 "id": job_id, "lote": lote, "rotulo": rotulo,
                 "missao": missao, "config": cfg, "condicao": cfg["condicao"], "repeticao": rep,
                 "etapa": "na_fila", "erro": "",
-                "arquivo": (f"Relatorio_PDF_{nome_pasta}_PT_{configuracoes.nome_arquivo(cfg)}"
-                            f"_{carimbo}_j{job_id}.zip"),
+                "arquivo": arquivo,
                 "coletor": bool(coletor), "ping_host": host_valido(ping_host), "coletor_csv": "",
                 "t_pedido": time.monotonic(), "pedido_em": datetime.now().isoformat(timespec="seconds"),
                 "t_inicio": None, "espera_fila_s": None,
@@ -735,7 +754,7 @@ def lista_relatorios():
         missao, config, data = ler_nome_relatorio(nome)
         segundos = tamanho * 8 / (LINK_MBPS * 1e6)
         arquivos.append({
-            "nome": nome, "missao": missao, "config": config, "roi": "roi" in config, "data": data,
+            "nome": nome, "missao": missao, "config": config, "roi": "roi" in config.lower(), "data": data,
             "mb": round(tamanho / 1048576, 2),
             "estimativa": f"{segundos:.0f} s" if segundos < 90 else f"{segundos / 60:.1f} min",
         })

@@ -303,6 +303,18 @@ def test_ler_nome_relatorio(modulos):
     _, sw = modulos
     m, c, d = sw.ler_nome_relatorio("Relatorio_PDF_rota_A_PT_800x800_q45_roi1600q80f400qf30_20260520_151007.zip")
     assert (m, c, d) == ("rota_A", "800x800_q45_roi1600q80f400qf30", "20/05/2026 15:10")
+    assert sw.ler_nome_relatorio("600x600-ROI_2026-05-20_20261124-204712.zip") == \
+        ("2026-05-20", "600x600-ROI", "24/11/2026 20:47")
+    assert sw.ler_nome_relatorio("original_rota_B_x_20261124-204712_r2_0a1b2c3d.zip")[:2] == ("rota_B_x", "original")
+
+
+def test_rotulo_download():
+    import configuracoes as cf
+    r = lambda c: cf.rotulo_download(cf.ler_condicao(c))
+    assert r("600/35") == "600x600" and r("roi:600/35") == "600x600-ROI"
+    assert r("1600/85") == "1600x1600" and r("roi:1200/70+pol") == "1200x1200-ROI-pol"
+    assert r("600/50") == "600x600-q50" and r("roi:1600/80") == "1600x1600-q80-ROI"
+    assert r("roi:1600/80/400/0") == "1600x1600-q80-ROI-f400-qf0" and r("original") == "original"
 
 
 # ------------------------------------------------------------

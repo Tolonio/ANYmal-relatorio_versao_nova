@@ -72,6 +72,28 @@ def nome_curto(cfg: dict) -> str:
     return s
 
 
+# qualidade que acompanha cada lado no artigo: só aparece no nome se for diferente
+QUALIDADE_DO_LADO = {600: 35, 800: 45, 1200: 70, 1600: 85}
+
+
+def rotulo_download(cfg: dict) -> str:
+    """Começo do nome do ZIP: '600x600', '600x600-ROI', '600x600-q50-ROI', 'original'."""
+    if cfg["modo"] == "original":
+        return "original"
+    roi = cfg["modo"] == "roi"
+    lado = cfg["roi_lado"] if roi else cfg["lado"]
+    qual = cfg["roi_qualidade"] if roi else cfg["qualidade"]
+    s = f"{lado}x{lado}"
+    if QUALIDADE_DO_LADO.get(lado) != qual:
+        s += f"-q{qual}"
+    if roi:
+        s += "-ROI"
+        if cfg["roi_fundo"] != max(64, cfg["roi_lado"] // FUNDO_FRACAO) or cfg["roi_qualidade_fundo"] != QUALIDADE_FUNDO:
+            s += f"-f{cfg['roi_fundo']}-qf{cfg['roi_qualidade_fundo']}"
+        s += {"poligono": "-pol", "circulo": "-circ"}.get(cfg.get("roi_modo"), "")
+    return s
+
+
 def nome_arquivo(cfg: dict) -> str:
     """Forma segura para nome de arquivo: 'roi1200q70f300qf30', '1200x1200_q70', 'original'."""
     if cfg["modo"] == "original":
