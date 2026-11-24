@@ -12,7 +12,7 @@ da transferência (limitação apontada no artigo).
 
 Só usa a biblioteca padrão do Python. Exemplo (terminal do VS Code):
 
-  python experimento_pc.py --robo http://192.168.0.50:5050 ^
+  python experimento_pc.py --robo http://192.168.0.50:5051 ^
       --missao /home/integration/.ros/reports/2026-05-20 ^
       --condicoes original 600/35 1200/70 roi:600/35 roi:1200/70 roi:1600/85 ^
       --repeticoes 3 --saida experimento_2026-11-25
@@ -198,7 +198,7 @@ def tempo_txt(s):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--robo", required=True, help="ex.: http://192.168.0.50:5050")
+    ap.add_argument("--robo", required=True, help="ex.: http://192.168.0.50:5051")
     ap.add_argument("--missao", required=True, help="pasta da missão NO ROBÔ")
     ap.add_argument("--condicoes", nargs="+",
                     default=["original", "600/35", "1200/70", "roi:600/35", "roi:1200/70", "roi:1600/85"])

@@ -45,6 +45,10 @@ from processador_relatorio import (
 
 CONFIG_EXPERIMENTO = CONFIG_PADRAO["condicao"]   # condição padrão (botão "Gerar relatório")
 
+# Porta do servidor. A versão antiga usa 5050; a nova usa 5051 para as duas poderem
+# rodar ao mesmo tempo. Para trocar: SERVIDOR_PORTA=8085 python3 servidor_web.py
+PORTA = int(os.environ.get("SERVIDOR_PORTA", "5051"))
+
 # Taxa do link usada para a ESTIMATIVA inicial de download (Mbps)
 LINK_MBPS = 3.0
 
@@ -809,7 +813,7 @@ if __name__ == "__main__":
     roi = info_roi()
     print("Compressão por ROI:", f"disponível ({roi['imagens_anotadas']} fotos anotadas)" if roi["ativa"] else "sem anotações")
     print("Pasta das missões:", PASTA_REMOTA)
-    print("Porta: 5050")
+    print("Porta:", PORTA, f"(abra http://<ip-do-robo>:{PORTA})")
     print("Relatórios salvos em:", PASTA_RELATORIOS)
     print("Registro das medições:", ARQUIVO_REGISTRO)
     print("Coletor:", PASTA_COLETOR)
@@ -817,4 +821,4 @@ if __name__ == "__main__":
     print()
 
     log.info("Servidor iniciado (%s)", CONFIG_EXPERIMENTO)
-    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=PORTA, debug=False, threaded=True)

@@ -118,6 +118,10 @@ augmentation e sem Resize, e substitua esse arquivo. A ligação marcação ↔ 
 python3 compressor_roi.py verificar --anotacoes anotacoes_roi/ --imagens <pasta resources> --saida conferencia/
 ```
 
+**Porta:** a versão nova usa a **5051** (a antiga usa a 5050), então as duas podem ficar
+ligadas ao mesmo tempo. Para outra porta: `SERVIDOR_PORTA=8085 python3 servidor_web.py`.
+Para ver o que ocupa uma porta: `sudo ss -ltnp | grep 5051`.
+
 **Variáveis úteis:**
 `RELATORIO_CONDICAO=roi:1200/70` (condição do botão "Gerar relatório"),
 `RELATORIO_ROI_ANOTACOES=/caminho`, `COLETOR_INTERFACE=enp0s31f6` (padrão: a interface da rota padrão),
@@ -172,7 +176,7 @@ O `PATH` do serviço inclui `/usr/sbin` e `/bin` para o coletor achar `tc` e `pi
 No PC ligado à rede do robô (com o `tc` aplicado no robô):
 
 ```powershell
-python experimento_pc.py --robo http://<IP_DO_ROBO>:5050 `
+python experimento_pc.py --robo http://<IP_DO_ROBO>:5051 `
     --missao /home/integration/.ros/reports/<pasta da missão> `
     --condicoes original 600/35 1200/70 roi:1200/70 roi:1600/85 `
     --repeticoes 3 --rotulo "tc corrigido, robô deitado" --saida experimento_01
