@@ -1,0 +1,6 @@
+# Bibliotecas para rodar no PC: avaliação de qualidade (avaliar_roi.py) e testes.
+# O experimento_pc.py não precisa de nenhuma (só usa a biblioteca padrão).
+-r requirements.txt
+scikit-image
+matplotlib
+pytest

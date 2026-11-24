@@ -92,21 +92,43 @@ da 1200/70 e da 1600/85 com menos bytes. Se couber, `roi:1600/85+pol` também.
 
 ## Instalação no robô
 
+O robô precisa de internet só nesta etapa. Um comando instala tudo: os pacotes do sistema
+do WeasyPrint, o venv dentro da pasta e as bibliotecas do `requirements.txt` (as do servidor
+antigo, `flask lxml weasyprint deep-translator`, mais `pillow numpy`). No fim ele confere
+tudo e diz se a ROI está disponível.
+
 ```bash
-cd Downloads/
-git clone https://github.com/Tolonio/ANYmal-relatorio_versao_nova.git
-scp -r ./ANYmal-relatorio_versao_nova/* integration@anymal-<nomedoanymal>-npc:/home/integration/ANYmal-relatorio_versao_nova
-ssh integration@anymal-<nomedoanymal>-npc
-cd /home/integration/ANYmal-relatorio_versao_nova
-python3 -m venv venv
-source venv/bin/activate
-sudo apt update
-sudo apt install -y libcairo2 libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf-2.0-0 shared-mime-info
-python3 -m pip install flask lxml weasyprint pillow numpy
-python3 servidor_web.py
+mkdir -p ~/Documents/anymalnew
+cd ~/Documents/anymalnew
+git clone https://github.com/Tolonio/ANYmal-relatorio_versao_nova.git .
+bash instalar.sh
 ```
 
-(`deep-translator` só é necessário com `RELATORIO_TRADUCAO_ONLINE=1`.)
+Para ligar (Ctrl+C para parar) e abrir no PC em `http://<ip-do-robo>:5051`:
+
+```bash
+cd ~/Documents/anymalnew
+bash iniciar.sh
+```
+
+Para atualizar depois de mudanças no GitHub:
+
+```bash
+cd ~/Documents/anymalnew
+git pull
+bash instalar.sh
+```
+
+Para o servidor ligar sozinho junto com o robô (cria o serviço `anymal_relatorio`, porta 5051;
+o serviço antigo `servidor_anymal`, na 5050, continua intacto):
+
+```bash
+bash instalar.sh --servico
+sudo systemctl status anymal_relatorio      # ver se está rodando
+sudo journalctl -u anymal_relatorio -f      # ver o log
+```
+
+No PC, para o `avaliar_roi.py` e os testes: `python -m pip install -r requirements-pc.txt`.
 
 **Anotações de ROI:** já vêm no repositório, em `anotacoes_roi/_annotations.coco.json`
 (export v2 do Roboflow: 99 fotos RGB e 25 térmicas da missão de 2026-05-20; só nomes de
@@ -115,7 +137,7 @@ augmentation e sem Resize, e substitua esse arquivo. A ligação marcação ↔ 
 é pelo nome do arquivo. Confira antes de medir:
 
 ```bash
-python3 compressor_roi.py verificar --anotacoes anotacoes_roi/ --imagens <pasta resources> --saida conferencia/
+venv/bin/python3 compressor_roi.py verificar --anotacoes anotacoes_roi/ --imagens <pasta resources> --saida conferencia/
 ```
 
 **Porta:** a versão nova usa a **5051** (a antiga usa a 5050), então as duas podem ficar
@@ -126,40 +148,6 @@ Para ver o que ocupa uma porta: `sudo ss -ltnp | grep 5051`.
 `RELATORIO_CONDICAO=roi:1200/70` (condição do botão "Gerar relatório"),
 `RELATORIO_ROI_ANOTACOES=/caminho`, `COLETOR_INTERFACE=enp0s31f6` (padrão: a interface da rota padrão),
 `COLETOR_ESPERA_DOWNLOAD_S=1800`.
-
-### Serviço (opcional)
-
-```
-sudo nano /etc/systemd/system/anymal_relatorio_v2.service
-```
-
-```
-[Unit]
-Description=Servidor Web do Tradutor ANYmal
-After=network.target
-
-[Service]
-Type=simple
-User=integration
-Group=integration
-WorkingDirectory=/home/integration/ANYmal-relatorio_versao_nova
-Environment="PATH=/home/integration/ANYmal-relatorio_versao_nova/venv/bin:/usr/bin:/usr/sbin:/bin"
-Environment="PYTHONUNBUFFERED=1"
-ExecStart=/home/integration/ANYmal-relatorio_versao_nova/venv/bin/python3 /home/integration/ANYmal-relatorio_versao_nova/servidor_web.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now anymal_relatorio_v2.service
-sudo systemctl status anymal_relatorio_v2.service
-```
-
-O `PATH` do serviço inclui `/usr/sbin` e `/bin` para o coletor achar `tc` e `ping`.
 
 ---
 

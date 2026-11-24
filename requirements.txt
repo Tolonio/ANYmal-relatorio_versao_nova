@@ -1,0 +1,9 @@
+# Bibliotecas do servidor no robô (instaladas pelo ./instalar.sh no venv)
+# As quatro primeiras já eram usadas pelo servidor antigo (Anymal-Tradu-o).
+flask
+lxml
+weasyprint
+deep-translator      # só é usado com RELATORIO_TRADUCAO_ONLINE=1
+# novas nesta versão
+pillow
+numpy
