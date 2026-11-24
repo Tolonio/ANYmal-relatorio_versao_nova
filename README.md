@@ -159,6 +159,44 @@ Para ver o que ocupa uma porta: `sudo ss -ltnp | grep 5051`.
   link do CSV do coletor.
 * **Relatórios salvos**: todos os ZIPs em `~/relatorios_gerados`.
 
+## Diagnóstico: por que a vazão cai para ~0,06 Mbit/s com o tc
+
+No artigo, o tbf (3 Mbit/s) e o netem (167 ms) ficam na raiz da `enp0s31f6` do computador
+de navegação. Assim eles limitam **tudo** o que sai dela, inclusive o tráfego interno do
+robô (LiDAR, câmeras, ROS), que na planta não passa pelo link de 3 Mbit/s. A hipótese é que
+esse tráfego enche a fila (netem `limit 140`), os pacotes do relatório se perdem e o TCP cai
+para cerca de 1 pacote por ida e volta (1448 B / 0,17 s ≈ 0,07 Mbit/s).
+
+O diagnóstico mede o mesmo envio TCP (iperf3, robô → PC) mudando um fator por vez:
+sem limite, limite do artigo, só taxa, só atraso, fila 1000, sem TSO/GSO e limite só para
+o PC. Também mede quanto tráfego de fundo sai do robô e para quem.
+
+No **PC** (Linux), deixe aberto:
+
+```bash
+sudo apt install -y iperf3
+iperf3 -s
+```
+
+No **robô** (~6 min; nunca deixa limite aplicado no fim):
+
+```bash
+cd ~/Documents/anymalnew
+sudo bash rede/diagnostico_rede.sh <IP_DO_PC>
+```
+
+Sai uma pasta `rede/diagnostico_<data>/` com tudo e um `resumo.md` com as tabelas e a
+leitura automática.
+
+**Limitar a rede** (substitui os comandos `tc` à mão):
+
+```bash
+sudo bash rede/limitar.sh artigo                # igual ao artigo: limita tudo que sai da interface
+sudo bash rede/limitar.sh destino <IP_DO_PC>    # limita só o que vai para o PC (como o link da planta)
+sudo bash rede/limitar.sh status
+sudo bash rede/limitar.sh desligar
+```
+
 ## Rodar a matriz de experimentos do PC (VS Code)
 
 No PC ligado à rede do robô (com o `tc` aplicado no robô):
